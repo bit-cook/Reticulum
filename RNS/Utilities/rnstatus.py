@@ -154,7 +154,7 @@ def get_remote_status(destination_hash, include_lstats, identity, no_output=Fals
 
 def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=False, astats=False, pstats=False, lstats=False, sorting=None,
                   sort_reverse=False, remote=None, management_identity=None, remote_timeout=RNS.Transport.PATH_REQUEST_TIMEOUT, must_exit=True,
-                  rns_instance=None, traffic_totals=False, discovered_interfaces=False, config_entries=False, burst_filter=False):
+                  rns_instance=None, traffic_totals=False, discovered_interfaces=False, config_entries=False, burst_filter=False, blocked_ips=False):
   
     if remote: require_shared = False
     else: require_shared = True
@@ -458,6 +458,9 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                                     p = ifstat["blocked_ips"] > 0
                                     if p: clients_string += "\n    Blocked   : "+str(ifstat["blocked_ips"])+" IP"+"s" if p else ""
 
+                            if blocked_ips and "blocked_ip_list" in ifstat and len(ifstat["blocked_ip_list"]) > 0:
+                                for bip in ifstat["blocked_ip_list"]: clients_string += f"\n                {bip}"
+
                         else:
                             clients = None
 
@@ -699,6 +702,7 @@ def main(must_exit=True, rns_instance=None):
         parser.add_argument("-P", "--pr-stats", action="store_true", help="show path request stats", default=False)
         parser.add_argument("-l", "--link-stats", action="store_true", help="show link stats", default=False)
         parser.add_argument("-B", "--burst", action="store_true", help="only show interfaces with active bursts", default=False)
+        parser.add_argument("-b", "--blocked-ips", action="store_true", help="show blocked IPs per interface", default=False)
         parser.add_argument("-t", "--totals", action="store_true", help="display traffic totals", default=False)
         parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, prx, ptx, held]", default=None, type=str)
         parser.add_argument("-r", "--reverse", action="store_true", help="reverse sorting", default=False)
@@ -737,7 +741,8 @@ def main(must_exit=True, rns_instance=None):
                     program_setup(configdir = configarg, dispall = args.all, verbosity=args.verbose, name_filter=args.filter, json=args.json,
                                   astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                                   remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=False, rns_instance=reticulum,
-                                  traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst)
+                                  traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
+                                  blocked_ips=args.blocked_ips)
               
                 finally:
                     sys.stdout = old_stdout
@@ -754,7 +759,8 @@ def main(must_exit=True, rns_instance=None):
             program_setup(configdir = configarg, dispall = args.all, verbosity=args.verbose, name_filter=args.filter, json=args.json,
                           astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                           remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=must_exit, rns_instance=rns_instance,
-                          traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst)
+                          traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
+                          blocked_ips=args.blocked_ips)
 
     except KeyboardInterrupt:
         print("")
