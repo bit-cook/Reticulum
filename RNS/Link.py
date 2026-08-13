@@ -191,7 +191,7 @@ class Link:
 
                 if len(data) == Link.ECPUBSIZE+Link.LINK_MTU_SIZE:
                     RNS.log("Link request includes MTU signalling", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
-                    try: link.mtu = Link.mtu_from_lr_packet(packet) or Reticulum.MTU
+                    try: link.mtu = Link.mtu_from_lr_packet(packet) or RNS.Reticulum.MTU
                     except Exception as e:
                         RNS.trace_exception(e)
                         link.mtu = RNS.Reticulum.MTU
