@@ -1504,7 +1504,7 @@ class Transport:
                         Transport.local_client_rssi_cache.pop(0)
 
             if hasattr(interface, "r_stat_snr"):
-                if interface.r_stat_rssi != None:
+                if interface.r_stat_snr != None:
                     packet.snr = interface.r_stat_snr
                     Transport.local_client_snr_cache.append([packet.packet_hash, packet.snr])
                     while len(Transport.local_client_snr_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
