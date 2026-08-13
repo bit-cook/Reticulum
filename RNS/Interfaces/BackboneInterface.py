@@ -311,7 +311,6 @@ class BackboneInterface(Interface):
                 BackboneInterface.ensure_epoll()
                 try:
                     while True:
-                        events = BackboneInterface.epoll.poll(1)
                         for fileno, event in BackboneInterface.epoll.poll(1):
                             if fileno in BackboneInterface.spawned_interface_filenos:
                                 spawned_interface = BackboneInterface.spawned_interface_filenos[fileno]
