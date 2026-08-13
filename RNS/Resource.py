@@ -447,8 +447,8 @@ class Resource:
                 self.hashmap = b""
                 collision_guard_list = []
                 for i in range(0,hashmap_entries):
-                    data = self.data[i*self.sdu:(i+1)*self.sdu]
-                    map_hash = self.get_map_hash(data)
+                    part_data = self.data[i*self.sdu:(i+1)*self.sdu]
+                    map_hash = self.get_map_hash(part_data)
 
                     if map_hash in collision_guard_list:
                         RNS.log("Found hash collision in resource map, remapping...", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
@@ -460,7 +460,7 @@ class Resource:
                         if len(collision_guard_list) > ResourceAdvertisement.COLLISION_GUARD_SIZE:
                             collision_guard_list.pop(0)
 
-                        part = RNS.Packet(link, data, context=RNS.Packet.RESOURCE)
+                        part = RNS.Packet(link, part_data, context=RNS.Packet.RESOURCE)
                         part.pack()
                         part.map_hash = map_hash
 
