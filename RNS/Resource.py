@@ -865,9 +865,9 @@ class Resource:
                 part_data = packet.data
                 part_hash = self.get_map_hash(part_data)
 
-                consecutive_index = self.consecutive_completed_height if self.consecutive_completed_height >= 0 else 0
-                i = consecutive_index
-                for map_hash in self.hashmap[consecutive_index:consecutive_index+self.window]:
+                search_start = self.consecutive_completed_height+1
+                i = search_start
+                for map_hash in self.hashmap[search_start:search_start+self.window]:
                     if map_hash == part_hash:
                         if self.parts[i] == None:
 
@@ -878,9 +878,6 @@ class Resource:
                             self.outstanding_parts -= 1
 
                             # Update consecutive completed pointer
-                            if i == self.consecutive_completed_height + 1:
-                                self.consecutive_completed_height = i
-                            
                             cp = self.consecutive_completed_height + 1
                             while cp < len(self.parts) and self.parts[cp] != None:
                                 self.consecutive_completed_height = cp
