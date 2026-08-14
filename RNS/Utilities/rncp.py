@@ -878,8 +878,8 @@ def main():
 
     except KeyboardInterrupt:
         print("")
-        if resource != None:
-            resource.cancel()
+        if current_resource != None:
+            current_resource.cancel()
         if link != None:
             link.teardown()
         RNS.exit()
