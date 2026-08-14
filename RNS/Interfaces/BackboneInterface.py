@@ -295,7 +295,7 @@ class BackboneInterface(Interface):
         if interface.socket:
             fileno = interface.socket.fileno()
             if fileno in BackboneInterface.spawned_interface_filenos:
-                try: BackboneInterface.epoll.modify(fileno, select.EPOLLOUT)
+                try: BackboneInterface.epoll.modify(fileno, select.EPOLLIN | select.EPOLLOUT)
                 except Exception as e:
                     if   str(e).endswith("No such file or directory"): pass
                     elif str(e).endswith("Bad file descriptor"):       pass
@@ -315,7 +315,8 @@ class BackboneInterface(Interface):
                             if fileno in BackboneInterface.spawned_interface_filenos:
                                 spawned_interface = BackboneInterface.spawned_interface_filenos[fileno]
                                 client_socket = spawned_interface.socket
-                                if client_socket and fileno == client_socket.fileno() and (event & select.EPOLLIN):
+                                socket_valid = client_socket and fileno == client_socket.fileno()
+                                if socket_valid and (event & select.EPOLLIN):
                                     try: received_bytes = client_socket.recv(spawned_interface.HW_MTU)
                                     except Exception as e:
                                         RNS.log(f"Error while reading from {spawned_interface}: {e}", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
@@ -336,8 +337,9 @@ class BackboneInterface(Interface):
                                         except Exception as e: RNS.log(f"Error while removing spawned interface from {pif}: {e}", RNS.LOG_ERROR)
 
                                         spawned_interface.receive(received_bytes)
-                                
-                                elif client_socket and fileno == client_socket.fileno() and (event & select.EPOLLOUT):
+
+                                socket_valid_after_read = socket_valid and fileno in BackboneInterface.spawned_interface_filenos
+                                if socket_valid_after_read and (event & select.EPOLLOUT):
                                     try: written = client_socket.send(spawned_interface.transmit_buffer)
                                     except Exception as e:
                                         written = 0
@@ -374,7 +376,7 @@ class BackboneInterface(Interface):
                                     spawned_interface.txb += written
                                     if spawned_interface.parent_interface: spawned_interface.parent_interface.txb += written
                                 
-                                elif client_socket and fileno == client_socket.fileno() and event & (select.EPOLLHUP):
+                                elif socket_valid_after_read and event & (select.EPOLLHUP):
                                     BackboneInterface.deregister_fileno(fileno)
                                     try:
                                         if fileno in BackboneInterface.spawned_interface_filenos: BackboneInterface.spawned_interface_filenos.pop(fileno)
