@@ -683,8 +683,8 @@ class Link:
         except Exception as e: pass
 
     def link_closed(self):
-        for resource in self.incoming_resources: resource.cancel()
-        for resource in self.outgoing_resources: resource.cancel()
+        for resource in self.incoming_resources.copy(): resource.cancel()
+        for resource in self.outgoing_resources.copy(): resource.cancel()
         if self._channel: self._channel._shutdown()
             
         self.prv = None
