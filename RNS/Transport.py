@@ -532,6 +532,7 @@ class Transport:
                 if time.time() > Transport.links_last_checked+Transport.links_check_interval:
 
                     with Transport.pending_links_lock:
+                        closed_pending_links = []
                         for link in Transport.pending_links:
                             if link.status == RNS.Link.CLOSED:
                                 # If we are not a Transport Instance, finding a pending link
@@ -555,7 +556,9 @@ class Transport:
                                                 blocked_if = None
                                                 path_requests[link.destination.hash] = blocked_if
 
-                                Transport.pending_links.remove(link)
+                                closed_pending_links.append(link)
+
+                        for closed_link in closed_pending_links: Transport.pending_links.remove(closed_link)
 
                     with Transport.active_links_lock:
                         closed_links = []
