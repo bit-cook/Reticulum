@@ -1742,7 +1742,7 @@ class BLEConnection(BluetoothDispatcher):
                         ble_devices = self.find_target_devices()
                     
                     if len(ble_devices) > 0: self.ble_device = ble_devices.pop()
-                    else:                    self.ble_device == None
+                    else:                    self.ble_device = None
 
                     if self.ble_device != None:
                         if self.was_connected:
