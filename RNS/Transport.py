@@ -380,7 +380,7 @@ class Transport:
                             timestamp = serialised_entry[1]
                             received_from = serialised_entry[2]
                             hops = serialised_entry[3]
-                            expires = serialised_entry[4]
+                            path_expires = serialised_entry[4]
                             random_blobs = list(set(serialised_entry[5]))
                             receiving_interface = Transport.find_interface_from_hash(serialised_entry[6])
                             announce_packet = Transport.get_cached_packet(serialised_entry[7], packet_type="announce")
@@ -393,7 +393,7 @@ class Transport:
                                 # increased hop-count.
                                 announce_packet.hops += 1
 
-                                tunnel_path = [timestamp, received_from, hops, expires, random_blobs, receiving_interface, announce_packet.packet_hash]
+                                tunnel_path = [timestamp, received_from, hops, path_expires, random_blobs, receiving_interface, announce_packet.packet_hash]
                                 tunnel_paths[destination_hash] = tunnel_path
 
                         if len(tunnel_paths) > 0:
@@ -3468,7 +3468,7 @@ class Transport:
                         timestamp = de[0]
                         received_from = de[1]
                         hops = de[2]
-                        expires = de[3]
+                        path_expires = de[3]
                         random_blobs = de[4][-Transport.PERSIST_RANDOM_BLOBS:]
                         packet_hash = de[6]
 
@@ -3477,7 +3477,7 @@ class Transport:
                             timestamp,
                             received_from,
                             hops,
-                            expires,
+                            path_expires,
                             random_blobs,
                             interface_hash,
                             packet_hash
