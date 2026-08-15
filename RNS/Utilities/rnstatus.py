@@ -225,15 +225,18 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                             location = f"{lat}, {lon}{height}"
                         else: location = "Unknown"
 
+                        lxmf_addr    = None
                         transport_id = None
-                        network = None
+                        network      = None
+                        if "operator_lxmf_address" in i: lxmf_addr = i['operator_lxmf_address']
                         if "transport_id" in i: transport_id = i["transport_id"]
                         if "transport_id" in i and "network_id" in i and i["transport_id"] != i["network_id"]:
                             network = i["network_id"]
 
-                        if idx > 0:      print("\n"+"="*32+"\n")
+                        if idx > 0:      print("\n"+"="*47+"\n")
                         if network:      print(f"Network   ID : {network}")
                         if transport_id: print(f"Transport ID : {transport_id}")
+                        if lxmf_addr:    print(f"LXMF address : {lxmf_addr}")
 
                         print(f"Name         : {name}")
                         print(f"Type         : {if_type}")
@@ -258,8 +261,7 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                         config_lines = i["config_entry"].split('\n')
                         for line in config_lines: print(f"  {line}")
 
-                    except Exception as e:
-                        pass
+                    except Exception as e: pass
               
             else:
                 print(f"{'Name':<25} {'Type':<12} {'Status':<12} {'Last Heard':<12} {'Value':<8} {'Location':<15}")

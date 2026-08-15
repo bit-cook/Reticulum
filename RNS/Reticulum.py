@@ -860,6 +860,7 @@ class Reticulum:
         discovery_announce_interval = None
         discovery_stamp_value = None
         discovery_name = None
+        discovery_lxmf_address = None
         discovery_encrypt = False
         reachable_on = None
         publish_ifac = False
@@ -891,6 +892,11 @@ class Reticulum:
                 if "discovery_frequency" in c: discovery_frequency = c.as_int("discovery_frequency")
                 if "discovery_bandwidth" in c: discovery_bandwidth = c.as_int("discovery_bandwidth")
                 if "discovery_modulation" in c: discovery_modulation = c.as_int("discovery_modulation")
+                if "discovery_lxmf_address" in c:
+                    if len(c["discovery_lxmf_address"]) == RNS.Identity.TRUNCATED_HASHLENGTH//8*2:
+                        try: discovery_lxmf_address = bytes.fromhex(c["discovery_lxmf_address"])
+                        except: RNS.log(f"Invalid interface discovery LXMF address: {c['discovery_lxmf_address']}", RNS.LOG_ERROR)
+                    else: RNS.log(f"Invalid length for interface discovery LXMF address: {c['discovery_lxmf_address']}", RNS.LOG_ERROR)
 
                 if not interface_mode in [Interface.Interface.MODE_GATEWAY, Interface.Interface.MODE_ACCESS_POINT, Interface.Interface.MODE_INTERNAL]:
                     if not ignore_config_warnings:
@@ -922,6 +928,7 @@ class Reticulum:
                     interface.discovery_publish_ifac          = publish_ifac
                     interface.reachable_on                    = reachable_on
                     interface.discovery_name                  = discovery_name
+                    interface.discovery_lxmf_address          = discovery_lxmf_address
                     interface.discovery_encrypt               = discovery_encrypt
                     interface.discovery_stamp_value           = discovery_stamp_value
                     interface.discovery_location              = discovery_location
