@@ -2350,20 +2350,19 @@ class Transport:
                             RNS.log("Proof received on wrong interface, not transporting it.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
 
                     with Transport.receipts_lock:
-                        for receipt in Transport.receipts:
-                            receipt_validated = False
-                            if proof_hash != None:
-                                # Only test validation if hash matches
-                                if receipt.hash == proof_hash:
-                                    receipt_validated = receipt.validate_proof_packet(packet)
-                            else:
-                                # In case of an implicit proof, we have
-                                # to check every single outstanding receipt
-                                receipt_validated = receipt.validate_proof_packet(packet)
+                        if proof_hash != None:
+                            # Only test validation if hash matches
+                            candidate_receipts = [r for r in Transport.receipts if r.hash == proof_hash]
+                        else:
+                            # In case of an implicit proof, we have
+                            # to check every single outstanding receipt
+                            candidate_receipts = Transport.receipts.copy()
 
-                            if receipt_validated:
-                                if receipt in Transport.receipts:
-                                    Transport.receipts.remove(receipt)
+                    for receipt in candidate_receipts:
+                        if receipt.status != RNS.PacketReceipt.SENT: continue
+                        if receipt.validate_proof_packet(packet):
+                            with Transport.receipts_lock:
+                                if receipt in Transport.receipts: Transport.receipts.remove(receipt)
 
     @staticmethod
     def synthesize_tunnel(interface):
