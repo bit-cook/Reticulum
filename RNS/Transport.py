@@ -571,6 +571,9 @@ class Transport:
 
                 # Process receipts list for timed-out packets
                 if time.time() > Transport.receipts_last_checked+Transport.receipts_check_interval:
+                    # TODO: The pop(0) is expensive under the lock.
+                    # Could improve contention via an initial reverse(),
+                    # then pop() trick or similar.
                     with Transport.receipts_lock:
                         while len(Transport.receipts) > Transport.MAX_RECEIPTS:
                             culled_receipt = Transport.receipts.pop(0)
@@ -578,6 +581,9 @@ class Transport:
                             culled_receipt.check_timeout()
                             should_collect = True
 
+                    # TODO: Actually, this whole thing might need re-
+                    # thinking a bit, but may require moving receipts
+                    # to a dict or something else entirely.
                     with Transport.receipts_lock:
                         expired_receipts = []
                         for receipt in Transport.receipts:
@@ -2349,6 +2355,9 @@ class Transport:
                         else:
                             RNS.log("Proof received on wrong interface, not transporting it.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
 
+                    # TODO: Lock contention could be improved here
+                    # by a copy(), instead of running the list
+                    # comprehension under lock.
                     with Transport.receipts_lock:
                         if proof_hash != None:
                             # Only test validation if hash matches
