@@ -376,7 +376,7 @@ class BackboneInterface(Interface):
                                     spawned_interface.txb += written
                                     if spawned_interface.parent_interface: spawned_interface.parent_interface.txb += written
                                 
-                                elif socket_valid_after_read and event & (select.EPOLLHUP):
+                                elif socket_valid_after_read and (event & select.EPOLLHUP):
                                     BackboneInterface.deregister_fileno(fileno)
                                     try:
                                         if fileno in BackboneInterface.spawned_interface_filenos: BackboneInterface.spawned_interface_filenos.pop(fileno)
