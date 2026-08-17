@@ -735,7 +735,7 @@ class InterfaceDiscovery():
                                 return
 
                             if is_ip_address(info["reachable_on"]) and is_invalid_ip_address(info["reachable_on"]):
-                                RNS.log(f"Not auto-connecting discovered interface with invalid IP address: {info["reachable_on"]}", RNS.LOG_DEBUG)
+                                RNS.log(f"Not auto-connecting discovered interface with invalid IP address: {info['reachable_on']}", RNS.LOG_DEBUG)
                                 return
 
                             interface_name = info["name"]
