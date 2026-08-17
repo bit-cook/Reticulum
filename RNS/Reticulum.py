@@ -1489,8 +1489,10 @@ class Reticulum:
                 ifstats["held_announces"]              = len(interface.held_announces)
                 ifstats["burst_active"]                = interface.ic_burst_active
                 ifstats["burst_activated"]             = interface.ic_burst_activated
+                ifstats["burst_count"]                 = interface.ic_burst_count
                 ifstats["pr_burst_active"]             = interface.ic_pr_burst_active
                 ifstats["pr_burst_activated"]          = interface.ic_pr_burst_activated
+                ifstats["pr_burst_count"]              = interface.ic_pr_burst_count
                 ifstats["status"]                      = interface.online
                 ifstats["mode"]                        = interface.mode
                 ifstats["gravity"]                     = interface.gravity
@@ -1498,12 +1500,30 @@ class Reticulum:
 
                 interfaces.append(ifstats)
 
-            stats               = {}
-            stats["interfaces"] = interfaces
-            stats["rxb"]        = RNS.Transport.traffic_rxb
-            stats["txb"]        = RNS.Transport.traffic_txb
-            stats["rxs"]        = RNS.Transport.speed_rx
-            stats["txs"]        = RNS.Transport.speed_tx
+            qsnapshot            = RNS.Transport.inbound_queues.snapshot()
+            dql                  = RNS.Transport.INBOUND_DA_QUEUE_LENGTH
+            aql                  = RNS.Transport.INBOUND_AN_QUEUE_LENGTH
+            pql                  = RNS.Transport.INBOUND_PR_QUEUE_LENGTH
+            ilql                 = RNS.Transport.INBOUND_IL_QUEUE_LENGTH
+            tql                  = dql+aql+pql+ilql
+
+            stats                = {}
+            stats["interfaces"]  = interfaces
+            stats["rxb"]         = RNS.Transport.traffic_rxb
+            stats["txb"]         = RNS.Transport.traffic_txb
+            stats["rxs"]         = RNS.Transport.speed_rx
+            stats["txs"]         = RNS.Transport.speed_tx
+            stats["rxqt"]        = qsnapshot[0]
+            stats["rxqd"]        = qsnapshot[1][0]
+            stats["rxqa"]        = qsnapshot[1][1]
+            stats["rxqp"]        = qsnapshot[1][2]
+            stats["rxqil"]       = qsnapshot[1][3]
+            stats["tqpressure"]  = qsnapshot[0]/tql     if qsnapshot[0]    else 0
+            stats["dqpressure"]  = qsnapshot[1][0]/dql  if qsnapshot[1][0] else 0
+            stats["aqpressure"]  = qsnapshot[1][1]/aql  if qsnapshot[1][1] else 0
+            stats["pqpressure"]  = qsnapshot[1][2]/pql  if qsnapshot[1][2] else 0
+            stats["ilqpressure"] = qsnapshot[1][3]/ilql if qsnapshot[1][3] else 0
+            stats["txq"]         = None
 
             if Reticulum.transport_enabled():
                 stats["transport_id"] = RNS.Transport.identity.hash

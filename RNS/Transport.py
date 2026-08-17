@@ -37,10 +37,52 @@ import struct
 import inspect
 import threading
 from time import sleep
-from threading import Lock
 from collections import deque
+from queue import Full, Empty
+from threading import Lock, Condition
 from .vendor import umsgpack as umsgpack
 from RNS.Interfaces.BackboneInterface import BackboneInterface
+
+class InboundQueues:
+    __slots__ = ("_cond", "_queues", "_sizes")
+
+    def __init__(self, sizes):
+        self._cond   = Condition()
+        self._queues = [deque() for _ in sizes]
+        self._sizes  = sizes
+
+    def put(self, traffic_class, item, block=False, timeout=None):
+        with self._cond:
+            q = self._queues[traffic_class]
+            if len(q) >= self._sizes[traffic_class]: raise Full
+            q.append(item)
+            # For single drainer, notify() suffices, but will
+            # need to move this to notify_all for the future
+            # transition to free-threaded drainers.
+            self._cond.notify()
+
+    def get(self, block=True, timeout=None):
+        deadline = None if timeout is None else time.monotonic() + timeout
+        with self._cond:
+            while True:
+                # Scan queues in priority order
+                for q in self._queues:
+                    if q: return q.popleft()
+                if not block: raise Empty
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0: raise Empty
+                self._cond.wait(remaining)
+
+    # Approximate queue height, this is an approximate value,
+    # reads without locking and never blocks.
+    def qsize(self, traffic_class=None):
+        if traffic_class is None: return sum(len(q) for q in self._queues)
+        return len(self._queues[traffic_class])
+
+    # Consistent-time, single-instant height snapshot.
+    def snapshot(self):
+        with self._cond: heights = tuple(len(q) for q in self._queues)
+        return (sum(heights), heights)
 
 class Transport:
     """
@@ -57,6 +99,11 @@ class Transport:
     REACHABILITY_UNREACHABLE    = 0x00
     REACHABILITY_DIRECT         = 0x01
     REACHABILITY_TRANSPORT      = 0x02
+
+    TC_DATA                     = 0x00
+    TC_ANNOUNCE                 = 0x01
+    TC_PATH_REQUEST             = 0x02
+    TC_INGRESS_LIMITED          = 0x03
 
     APP_NAME = "rnstransport"
 
@@ -81,6 +128,14 @@ class Transport:
     PATH_REQUEST_GRACE          = 0.4          # Grace time before a path announcement is made, allows directly reachable peers to respond first
     PATH_REQUEST_RG             = 1.5          # Extra grace time for roaming-mode interfaces to allow more suitable peers to respond first
     PATH_REQUEST_MI             = 20           # Minimum interval in seconds for automated path requests
+
+    USE_INBOUND_QUEUE           = True
+    USE_OUTBOUND_QUEUE          = False
+    INBOUND_DA_QUEUE_LENGTH     = 8192
+    INBOUND_AN_QUEUE_LENGTH     = 1024
+    INBOUND_PR_QUEUE_LENGTH     = 1024
+    INBOUND_IL_QUEUE_LENGTH     = 256
+    OUTBOUND_QUEUE_LENGTH       = 32768
 
     STATE_UNKNOWN               = 0x00
     STATE_UNRESPONSIVE          = 0x01
@@ -127,7 +182,12 @@ class Transport:
     discovery_pr_tags           = []           # A table for keeping track of tagged path requests
     max_pr_tags                 = 32000        # Maximum amount of unique path request tags to remember
     max_queued_discovery_prs    = 32           # Maximum amount of queued discovery path requests
+    pr_destination_hash         = None         # Destination hash of the local path request destination
 
+    inbound_queues              = InboundQueues((INBOUND_DA_QUEUE_LENGTH,
+                                                 INBOUND_AN_QUEUE_LENGTH,
+                                                 INBOUND_PR_QUEUE_LENGTH,
+                                                 INBOUND_IL_QUEUE_LENGTH))
     interfaces_lock             = Lock()
     destinations_lock           = Lock()
     destinations_map_lock       = Lock()
@@ -260,6 +320,7 @@ class Transport:
         Transport.path_request_destination.set_packet_callback(Transport.path_request_handler)
         Transport.control_destinations.append(Transport.path_request_destination)
         Transport.control_hashes.append(Transport.path_request_destination.hash)
+        Transport.pr_destination_hash = Transport.path_request_destination.hash
 
         Transport.tunnel_synthesize_destination = RNS.Destination(None, RNS.Destination.IN, RNS.Destination.PLAIN, Transport.APP_NAME, "tunnel", "synthesize")
         Transport.tunnel_synthesize_destination.set_packet_callback(Transport.tunnel_synthesize_handler)
@@ -424,6 +485,10 @@ class Transport:
 
         # Sort interfaces according to bitrate
         Transport.prioritize_interfaces()
+
+        # Spawn queue workers
+        if Transport.USE_INBOUND_QUEUE:  threading.Thread(target=Transport.inbound_job,  daemon=True).start()
+        if Transport.USE_OUTBOUND_QUEUE: threading.Thread(target=Transport.outbound_job, daemon=True).start()
         Transport.ready = True
 
         # Synthesize tunnels for any interfaces wanting it
@@ -1027,7 +1092,6 @@ class Transport:
         except Exception as e:
             RNS.log("An exception occurred while running Transport jobs.", RNS.LOG_ERROR)
             RNS.log("The contained exception was: "+str(e), RNS.LOG_ERROR)
-            RNS.trace_exception(e) # TODO: Remove
 
         if outgoing:
             def job(): Transport.handle_outgoing_announces(outgoing)
@@ -1116,6 +1180,25 @@ class Transport:
 
     @staticmethod
     def outbound(packet):
+        if not Transport.USE_OUTBOUND_QUEUE: return Transport._outbound(packet)
+        else:
+            raise NotImplementedError("Outbound queue-based processing not available")
+            # try: Transport.outbound_queue.put(packet, block=False)
+            # except Full: RNS.log(f"Dropping outbound packet, TX queue is full", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+            # except Exception as e: RNS.log(f"Error while inserting into outbound queue: {e}", RNS.LOG_ERROR)
+            # return False
+
+    @staticmethod
+    def outbound_job():
+        raise NotImplementedError("Outbound queue-based processing not available")
+        while Transport._should_run:
+            try: Transport._outbound(Transport.outbound_queue.get())
+            except Exception as e:
+                RNS.log(f"Error while draining outbound queue: {e}", RNS.LOG_ERROR)
+                RNS.trace_exception(e)
+
+    @staticmethod
+    def _outbound(packet):
         sent = False
         outbound_time = time.time()
 
@@ -1497,41 +1580,125 @@ class Transport:
         else: return
 
         if Transport.identity == None: return
-            
+
         packet = RNS.Packet(None, raw)
         if not packet.unpack(): return
-            
+        if not Transport.packet_filter(packet): return
+        traffic_class = Transport.TC_DATA
+
         packet.receiving_interface = interface
         packet.hops += 1
 
-        if interface != None:
-            if hasattr(interface, "r_stat_rssi"):
-                if interface.r_stat_rssi != None:
-                    packet.rssi = interface.r_stat_rssi
+        # Ingress limit announces early
+        if packet.packet_type == RNS.Packet.ANNOUNCE:
+            traffic_class = Transport.TC_ANNOUNCE
+            announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
+            if not announce_signature_valid: return
+            elif packet.receiving_interface != None: packet.receiving_interface.received_announce()
+            announced_destination_known = packet.destination_hash in Transport.path_table
+
+            if not announced_destination_known:
+                # This is an unknown destination, and we'll apply
+                # potential ingress limiting. Already known
+                # destinations will have re-announces controlled
+                # by normal announce rate limiting.
+                if packet.destination_hash in Transport.path_requests or packet.destination_hash in Transport.discovery_path_requests:
+                    # RNS.log(f"Skipping ingress limit check for {RNS.prettyhexrep(packet.destination_hash)} due to waiting path requests", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    pass
+
+                elif packet.receiving_interface.should_ingress_limit():
+                    packet.receiving_interface.hold_announce(packet)
+                    return
+
+        # TODO: Ingress limit path requests early
+        elif packet.destination_hash == Transport.pr_destination_hash:
+            traffic_class = Transport.TC_PATH_REQUEST
+            if not len(packet.data) >= RNS.Identity.TRUNCATED_HASHLENGTH//8: return
+            else:
+                tag_bytes = None
+                tag_valid = False
+                destination_hash = packet.data[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
+                if   len(packet.data) > (RNS.Identity.TRUNCATED_HASHLENGTH//8)*2: tag_bytes = packet.data[RNS.Identity.TRUNCATED_HASHLENGTH//8*2:]
+                elif len(packet.data) > (RNS.Identity.TRUNCATED_HASHLENGTH//8):   tag_bytes = packet.data[RNS.Identity.TRUNCATED_HASHLENGTH//8:]
+
+                if tag_bytes == None:
+                    # RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
+                    RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    return
+                else:
+                    if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
+                    unique_tag = destination_hash+tag_bytes
+
+                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
+                    with Transport.discovery_pr_tags_lock:
+                        if not unique_tag in Transport.discovery_pr_tags:
+                            Transport.discovery_pr_tags.append(unique_tag)
+                            tag_valid = True
+
+                    if not tag_valid:
+                        RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+                        return
+
+                    if interface.should_ingress_limit_pr(): traffic_class = Transport.TC_INGRESS_LIMITED
+
+        if not Transport.USE_INBOUND_QUEUE: return Transport._inbound(packet)
+        else:
+            try: Transport.inbound_queues.put(traffic_class, packet, block=False)
+            except Full: RNS.log(f"Dropping inbound packet, queue is full (tc={traffic_class})", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+            except Exception as e: RNS.log(f"Error while inserting into inbound queue: {e}", RNS.LOG_ERROR)
+
+            # try:
+            #     # Transport.inbound_data_queue.put(packet, block=False)
+            #     if   traffic_class == Transport.TC_DATA:            Transport.inbound_data_queue.put(packet, block=False)
+            #     elif traffic_class == Transport.TC_ANNOUNCE:        Transport.inbound_announce_queue.put(packet, block=False)
+            #     elif traffic_class == Transport.TC_PATH_REQUEST:    Transport.inbound_pr_queue.put(packet, block=False)
+            #     elif traffic_class == Transport.TC_INGRESS_LIMITED: Transport.inbound_il_queue.put(packet, block=False)
+            #     else:                                               Transport.inbound_data_queue.put(packet, block=False)
+
+            # except Full: RNS.log(f"Dropping inbound packet, queue is full (tc={traffic_class})", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+            # except Exception as e: RNS.log(f"Error while inserting into inbound queue: {e}", RNS.LOG_ERROR)
+
+    @staticmethod
+    def inbound_job():
+        while Transport._should_run:
+            try: Transport._inbound(Transport.inbound_queues.get())
+            except Exception as e:
+                RNS.log(f"Error while draining outbound queue: {e}", RNS.LOG_ERROR)
+                RNS.trace_exception(e)
+
+    @staticmethod
+    def _inbound(packet):
+        if packet.receiving_interface != None:
+            if not packet.receiving_interface.online: return
+
+            if hasattr(packet.receiving_interface, "r_stat_rssi"):
+                if packet.receiving_interface.r_stat_rssi != None:
+                    packet.rssi = packet.receiving_interface.r_stat_rssi
                     Transport.local_client_rssi_cache.append([packet.packet_hash, packet.rssi])
                     while len(Transport.local_client_rssi_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
                         Transport.local_client_rssi_cache.pop(0)
 
-            if hasattr(interface, "r_stat_snr"):
-                if interface.r_stat_snr != None:
-                    packet.snr = interface.r_stat_snr
+            if hasattr(packet.receiving_interface, "r_stat_snr"):
+                if packet.receiving_interface.r_stat_snr != None:
+                    packet.snr = packet.receiving_interface.r_stat_snr
                     Transport.local_client_snr_cache.append([packet.packet_hash, packet.snr])
                     while len(Transport.local_client_snr_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
                         Transport.local_client_snr_cache.pop(0)
 
-            if hasattr(interface, "r_stat_q"):
-                if interface.r_stat_q != None:
-                    packet.q = interface.r_stat_q
+            if hasattr(packet.receiving_interface, "r_stat_q"):
+                if packet.receiving_interface.r_stat_q != None:
+                    packet.q = packet.receiving_interface.r_stat_q
                     Transport.local_client_q_cache.append([packet.packet_hash, packet.q])
                     while len(Transport.local_client_q_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
                         Transport.local_client_q_cache.pop(0)
 
         if len(Transport.local_client_interfaces) > 0:
-            if Transport.is_local_client_interface(interface): packet.hops -= 1
+            if Transport.is_local_client_interface(packet.receiving_interface): packet.hops -= 1
 
-        elif Transport.interface_to_shared_instance(interface): packet.hops -= 1
+        elif Transport.interface_to_shared_instance(packet.receiving_interface): packet.hops -= 1
 
-        if Transport.packet_filter(packet):
+        # TODO: Clean up
+        if True:
             # By default, remember packet hashes to avoid routing
             # loops in the network, using the packet filter.
             remember_packet_hash = True
@@ -1654,7 +1821,7 @@ class Transport:
                                 
                                 path_mtu       = RNS.Link.mtu_from_lr_packet(packet)
                                 mode           = RNS.Link.mode_from_lr_packet(packet)
-                                ph_mtu         = interface.HW_MTU if interface else None
+                                ph_mtu         = packet.receiving_interface.HW_MTU if packet.receiving_interface else None
                                 nh_mtu         = outbound_interface.HW_MTU
                                 if path_mtu:
                                     if outbound_interface.HW_MTU == None:
@@ -1755,24 +1922,6 @@ class Transport:
             # announces, queueing rebroadcasts of these, and removal
             # of queued announce rebroadcasts once handed to the next node.
             if packet.packet_type == RNS.Packet.ANNOUNCE:
-                announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
-                if not announce_signature_valid: return
-                elif interface != None: interface.received_announce()
-                announced_destination_known = packet.destination_hash in Transport.path_table
-
-                if not announced_destination_known:
-                    # This is an unknown destination, and we'll apply
-                    # potential ingress limiting. Already known
-                    # destinations will have re-announces controlled
-                    # by normal announce rate limiting.
-                    if packet.destination_hash in Transport.path_requests or packet.destination_hash in Transport.discovery_path_requests:
-                        # RNS.log(f"Skipping ingress limit check for {RNS.prettyhexrep(packet.destination_hash)} due to waiting path requests", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
-                        pass
-                    
-                    elif interface.should_ingress_limit():
-                        interface.hold_announce(packet)
-                        return
-
                 local_destination = None
                 with Transport.destinations_map_lock:
                     if packet.destination_hash in Transport.destinations_map:
@@ -1821,7 +1970,7 @@ class Transport:
                         random_blob = packet.data[RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8:RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8+10]
                         random_blobs = []
                         with Transport.inbound_announce_lock:
-                            announced_destination_known |= packet.destination_hash in Transport.path_table
+                            announced_destination_known = packet.destination_hash in Transport.path_table
                             if not announced_destination_known:
                                 # If this destination is unknown in our table
                                 # we should add it
@@ -2991,18 +3140,12 @@ class Transport:
 
                     unique_tag = destination_hash+tag_bytes
 
-                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
-                    with Transport.discovery_pr_tags_lock:
-                        if not unique_tag in Transport.discovery_pr_tags:
-                            Transport.discovery_pr_tags.append(unique_tag)
+                    Transport.path_request(destination_hash,
+                                           Transport.from_local_client(packet),
+                                           packet.receiving_interface,
+                                           requestor_transport_id = requesting_transport_instance,
+                                           tag=tag_bytes)
 
-                            Transport.path_request(destination_hash,
-                                                   Transport.from_local_client(packet),
-                                                   packet.receiving_interface,
-                                                   requestor_transport_id = requesting_transport_instance,
-                                                   tag=tag_bytes)
-
-                        else: RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                 else: RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
         except Exception as e: RNS.log(f"Error while handling path request. The contained exception was: {e}", RNS.LOG_ERROR)
 
