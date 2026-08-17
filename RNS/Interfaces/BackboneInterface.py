@@ -170,6 +170,24 @@ class BackboneInterface(Interface):
             raise SystemError("Insufficient parameters to create listener")
 
 
+    __last_ic_burst_count_check = 0
+    __last_ic_burst_count_state = 0
+    @property
+    def ic_burst_count(self):
+        if time.time() > self.__last_ic_burst_count_check + 2:
+            self.__last_ic_burst_count_state = len([i.ic_burst_active for i in self.spawned_interfaces if i.ic_burst_active])
+
+        return self.__last_ic_burst_count_state
+
+    __last_ic_pr_burst_count_check = 0
+    __last_ic_pr_burst_count_state = 0
+    @property
+    def ic_pr_burst_count(self):
+        if time.time() > self.__last_ic_pr_burst_count_check + 2:
+            self.__last_ic_pr_burst_count_state = len([i.ic_pr_burst_active for i in self.spawned_interfaces if i.ic_pr_burst_active])
+
+        return self.__last_ic_pr_burst_count_state
+
     __last_ic_burst_check = 0
     __last_ic_burst_state = False
     @property

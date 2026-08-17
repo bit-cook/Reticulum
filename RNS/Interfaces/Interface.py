@@ -274,6 +274,12 @@ class Interface:
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.sent_path_request(from_spawned=True)
 
+    @property
+    def ic_burst_count(self): return None
+
+    @property
+    def ic_pr_burst_count(self): return None
+
     def incoming_announce_frequency(self):
         n = len(self.ia_freq_deque)
         if not n > self.IC_DEQUE_MIN_SAMPLE: return 0
