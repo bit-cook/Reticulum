@@ -152,9 +152,10 @@ def get_remote_status(destination_hash, include_lstats, identity, no_output=Fals
 
     return request_result
 
-def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=False, astats=False, pstats=False, lstats=False, sorting=None,
-                  sort_reverse=False, remote=None, management_identity=None, remote_timeout=RNS.Transport.PATH_REQUEST_TIMEOUT, must_exit=True,
-                  rns_instance=None, traffic_totals=False, discovered_interfaces=False, config_entries=False, burst_filter=False, blocked_ips=False):
+def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=False, astats=False, pstats=False, lstats=False,
+                  sorting=None, sort_reverse=False, remote=None, management_identity=None, must_exit=True, rns_instance=None,
+                  traffic_totals=False, discovered_interfaces=False, config_entries=False, burst_filter=False, blocked_ips=False,
+                  queue_stats=False, remote_timeout=RNS.Transport.PATH_REQUEST_TIMEOUT):
   
     if remote: require_shared = False
     else: require_shared = True
@@ -577,13 +578,17 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
 
                         burst_str = ""
                         if "burst_active" in ifstat and ifstat["burst_active"]:
+                            if "burst_count" in ifstat and ifstat["burst_count"]: bcstr = f"on {ifstat['burst_count']} "
+                            else:                                                 bcstr = ""
                             for_str = RNS.prettytime(time.time()-ifstat["burst_activated"])
-                            burst_str = f" burst for {for_str}"
+                            burst_str = f" burst {bcstr}for {for_str}"
                       
                         pburst_str = ""
                         if "pr_burst_active" in ifstat and ifstat["pr_burst_active"]:
+                            if "pr_burst_count" in ifstat and ifstat["pr_burst_count"]: prbcstr = f"on {ifstat['pr_burst_count']} "
+                            else:                                                       prbcstr = ""
                             for_str = RNS.prettytime(time.time()-ifstat["pr_burst_activated"])
-                            pburst_str = f"burst for {for_str}"
+                            pburst_str = f"burst {prbcstr}for {for_str}"
                       
                         rxb_str = "↓"+RNS.prettysize(ifstat["rxb"])
                         txb_str = "↑"+RNS.prettysize(ifstat["txb"])
@@ -660,14 +665,25 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
             rxb_str = "↓"+RNS.prettysize(stats["rxb"])
             txb_str = "↑"+RNS.prettysize(stats["txb"])
             strdiff = len(rxb_str)-len(txb_str)
-            if strdiff > 0:
-                txb_str += " "*strdiff
-            elif strdiff < 0:
-                rxb_str += " "*-strdiff
+            if   strdiff > 0: txb_str += " "*strdiff
+            elif strdiff < 0: rxb_str += " "*-strdiff
 
             rxstat  = rxb_str+"  "+RNS.prettyspeed(stats["rxs"])
             txstat  = txb_str+"  "+RNS.prettyspeed(stats["txs"])
             print(f"\n Totals       : {txstat}\n                {rxstat}")
+
+        if queue_stats:
+            tqpress = f"{round(stats['tqpressure']*100.0, 1)}% total, {stats['rxqt']} pkts"
+            dqpress = f"{round(stats['dqpressure']*100.0, 1)}% data, {stats['rxqd']} pkts"
+            aqpress = f"{round(stats['dqpressure']*100.0, 1)}% announce, {stats['rxqa']} pkts"
+            pqpress = f"{round(stats['dqpressure']*100.0, 1)}% path request, {stats['rxqp']} pkts"
+            ilpress = f"{round(stats['ilqpressure']*100.0, 1)}% ingress limiter, {stats['rxqil']} pkts"
+
+            print(f"\n Qu. Pressure : {tqpress}")
+            print(f"                {dqpress}")
+            print(f"                {aqpress}")
+            print(f"                {pqpress}")
+            print(f"                {ilpress}")
 
         if "transport_id" in stats and stats["transport_id"] != None:
             print("\n Transport Instance "+RNS.prettyhexrep(stats["transport_id"])+" running")
@@ -706,6 +722,7 @@ def main(must_exit=True, rns_instance=None):
         parser.add_argument("-B", "--burst", action="store_true", help="only show interfaces with active bursts", default=False)
         parser.add_argument("-b", "--blocked-ips", action="store_true", help="show blocked IPs per interface", default=False)
         parser.add_argument("-t", "--totals", action="store_true", help="display traffic totals", default=False)
+        parser.add_argument("-q", "--queues", action="store_true", help="display queue stats", default=False)
         parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, prx, ptx, held]", default=None, type=str)
         parser.add_argument("-r", "--reverse", action="store_true", help="reverse sorting", default=False)
         parser.add_argument("-j", "--json", action="store_true", help="output in JSON format", default=False)
@@ -744,7 +761,7 @@ def main(must_exit=True, rns_instance=None):
                                   astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                                   remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=False, rns_instance=reticulum,
                                   traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
-                                  blocked_ips=args.blocked_ips)
+                                  blocked_ips=args.blocked_ips, queue_stats=args.queues)
               
                 finally:
                     sys.stdout = old_stdout
@@ -762,7 +779,7 @@ def main(must_exit=True, rns_instance=None):
                           astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                           remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=must_exit, rns_instance=rns_instance,
                           traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
-                          blocked_ips=args.blocked_ips)
+                          blocked_ips=args.blocked_ips, queue_stats=args.queues)
 
     except KeyboardInterrupt:
         print("")
