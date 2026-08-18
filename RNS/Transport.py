@@ -1644,6 +1644,10 @@ class Transport:
                         RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                         return
 
+                    # TODO: Add early filtering here for non-transport nodes; there's no
+                    # reason to process further if we know we don't have the destination
+                    # locally on this system. Might need adding a local_client_dest_map.
+
                     if interface.should_ingress_limit_pr(): traffic_class = Transport.TC_INGRESS_LIMITED
 
         if not Transport.USE_INBOUND_QUEUE: return Transport._inbound(packet)
