@@ -2361,7 +2361,7 @@ class Transport:
             elif packet.packet_type == RNS.Packet.PROOF:
                 if packet.context == RNS.Packet.LRPROOF:
                     # This is a link request proof, check if it needs to be transported
-                    REBALANCE_LOGLEVEL = RNS.LOG_DEBUG
+                    REBALANCE_LOGLEVEL = RNS.LOG_PATHING
                     if (RNS.Reticulum.transport_enabled() or for_local_client_link or from_local_client) and packet.destination_hash in Transport.link_table:
                         link_entry = Transport.link_table[packet.destination_hash]
                         if packet.hops != link_entry[IDX_LT_REM_HOPS] and Transport.ALLOW_LINK_PATH_REBALANCE:
