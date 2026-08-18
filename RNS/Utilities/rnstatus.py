@@ -680,8 +680,8 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
             ilqdp   = f", {stats['rxqild']} dropped" if stats['rxqild'] else ""
             tqpress = f"{round(stats['tqpressure']*100.0, 1)}% total, {stats['rxqt']} pkts{tqdp}"
             dqpress = f"{round(stats['dqpressure']*100.0, 1)}% data, {stats['rxqd']} pkts{dqdp}"
-            aqpress = f"{round(stats['dqpressure']*100.0, 1)}% announce, {stats['rxqa']} pkts{aqdp}"
-            pqpress = f"{round(stats['dqpressure']*100.0, 1)}% path request, {stats['rxqp']} pkts{pqdp}"
+            aqpress = f"{round(stats['aqpressure']*100.0, 1)}% announce, {stats['rxqa']} pkts{aqdp}"
+            pqpress = f"{round(stats['pqpressure']*100.0, 1)}% path request, {stats['rxqp']} pkts{pqdp}"
             ilpress = f"{round(stats['ilqpressure']*100.0, 1)}% ingress limiter, {stats['rxqil']} pkts{ilqdp}"
 
             print(f"\n Qu. Pressure : {tqpress}")
