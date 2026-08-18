@@ -1657,7 +1657,7 @@ class Transport:
         while Transport._should_run:
             try: Transport._inbound(Transport.inbound_queues.get())
             except Exception as e:
-                RNS.log(f"Error while draining outbound queue: {e}", RNS.LOG_ERROR)
+                RNS.log(f"Error while draining inbound queue: {e}", RNS.LOG_ERROR)
                 RNS.trace_exception(e)
 
     @staticmethod
