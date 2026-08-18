@@ -1610,7 +1610,7 @@ class Transport:
                     packet.receiving_interface.hold_announce(packet)
                     return
 
-        # TODO: Ingress limit path requests early
+        # Ingress limit path requests early
         elif packet.destination_hash == Transport.pr_destination_hash:
             traffic_class = Transport.TC_PATH_REQUEST
             if not len(packet.data) >= RNS.Identity.TRUNCATED_HASHLENGTH//8: return
@@ -1622,8 +1622,7 @@ class Transport:
                 elif len(packet.data) > (RNS.Identity.TRUNCATED_HASHLENGTH//8):   tag_bytes = packet.data[RNS.Identity.TRUNCATED_HASHLENGTH//8:]
 
                 if tag_bytes == None:
-                    # RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
-                    RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                     return
                 else:
                     if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
@@ -1646,17 +1645,6 @@ class Transport:
             try: Transport.inbound_queues.put(traffic_class, packet, block=False)
             except Full: RNS.log(f"Dropping inbound packet, queue is full (tc={traffic_class})", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
             except Exception as e: RNS.log(f"Error while inserting into inbound queue: {e}", RNS.LOG_ERROR)
-
-            # try:
-            #     # Transport.inbound_data_queue.put(packet, block=False)
-            #     if   traffic_class == Transport.TC_DATA:            Transport.inbound_data_queue.put(packet, block=False)
-            #     elif traffic_class == Transport.TC_ANNOUNCE:        Transport.inbound_announce_queue.put(packet, block=False)
-            #     elif traffic_class == Transport.TC_PATH_REQUEST:    Transport.inbound_pr_queue.put(packet, block=False)
-            #     elif traffic_class == Transport.TC_INGRESS_LIMITED: Transport.inbound_il_queue.put(packet, block=False)
-            #     else:                                               Transport.inbound_data_queue.put(packet, block=False)
-
-            # except Full: RNS.log(f"Dropping inbound packet, queue is full (tc={traffic_class})", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
-            # except Exception as e: RNS.log(f"Error while inserting into inbound queue: {e}", RNS.LOG_ERROR)
 
     @staticmethod
     def inbound_job():
