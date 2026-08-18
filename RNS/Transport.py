@@ -3524,6 +3524,7 @@ class Transport:
                         # Throttle interface hash lookup to 2 seconds
                         if time.time() > interface_hashes_updated_at + 2:
                             interface_hashes = Transport.interface_hashes()
+                            interface_hashes_updated_at = time.time()
 
                         # Get the destination entry from the destination table
                         de        = path_table[destination_hash]
