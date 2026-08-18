@@ -758,7 +758,7 @@ class Transport:
                 # Cull the path request tags list if it has reached its max size
                 if len(Transport.discovery_pr_tags) > Transport.max_pr_tags:
                     with Transport.discovery_pr_tags_lock:
-                        Transport.discovery_pr_tags = Transport.discovery_pr_tags[len(Transport.discovery_pr_tags)-Transport.max_pr_tags:len(Transport.discovery_pr_tags)-1]
+                        Transport.discovery_pr_tags = Transport.discovery_pr_tags[len(Transport.discovery_pr_tags)-Transport.max_pr_tags:]
 
                 if time.time() > Transport.tables_last_culled + Transport.tables_cull_interval:
                     # Remove unneeded path state entries
