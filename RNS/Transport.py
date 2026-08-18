@@ -1403,10 +1403,10 @@ class Transport:
                                                 should_queue = False
 
                                                 if emission_timestamp > existing_entry["emitted"]:
-                                                    e["time"] = outbound_time
-                                                    e["hops"] = packet.hops
-                                                    e["emitted"] = emission_timestamp
-                                                    e["raw"] = packet.raw
+                                                    existing_entry["time"] = outbound_time
+                                                    existing_entry["hops"] = packet.hops
+                                                    existing_entry["emitted"] = emission_timestamp
+                                                    existing_entry["raw"] = packet.raw
 
                                             if should_queue:
                                                 entry = { "destination": packet.destination_hash,
