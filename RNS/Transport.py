@@ -44,17 +44,20 @@ from .vendor import umsgpack as umsgpack
 from RNS.Interfaces.BackboneInterface import BackboneInterface
 
 class InboundQueues:
-    __slots__ = ("_cond", "_queues", "_sizes")
+    __slots__ = ("_cond", "_queues", "_sizes", "_dropped")
 
     def __init__(self, sizes):
-        self._cond   = Condition()
-        self._queues = [deque() for _ in sizes]
-        self._sizes  = sizes
+        self._cond    = Condition()
+        self._queues  = [deque() for _ in sizes]
+        self._sizes   = sizes
+        self._dropped = [0 for _ in sizes]
 
     def put(self, traffic_class, item, block=False, timeout=None):
         with self._cond:
             q = self._queues[traffic_class]
-            if len(q) >= self._sizes[traffic_class]: raise Full
+            if len(q) >= self._sizes[traffic_class]:
+                self._dropped[traffic_class] += 1
+                raise Full
             q.append(item)
             # For single drainer, notify() suffices, but will
             # need to move this to notify_all for the future
@@ -81,8 +84,10 @@ class InboundQueues:
 
     # Consistent-time, single-instant height snapshot.
     def snapshot(self):
-        with self._cond: heights = tuple(len(q) for q in self._queues)
-        return (sum(heights), heights)
+        with self._cond:
+            heights = tuple(len(q) for q in self._queues)
+            dropped = tuple(d for d in self._dropped)
+        return (sum(heights), heights, dropped)
 
 class Transport:
     """

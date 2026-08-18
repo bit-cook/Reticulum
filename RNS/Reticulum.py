@@ -1538,6 +1538,11 @@ class Reticulum:
             stats["rxqa"]        = qsnapshot[1][1]
             stats["rxqp"]        = qsnapshot[1][2]
             stats["rxqil"]       = qsnapshot[1][3]
+            stats["rxqtd"]       = qsnapshot[2][0]+qsnapshot[2][1]+qsnapshot[2][2]+qsnapshot[2][3]
+            stats["rxqdd"]       = qsnapshot[2][0]
+            stats["rxqad"]       = qsnapshot[2][1]
+            stats["rxqpd"]       = qsnapshot[2][2]
+            stats["rxqild"]      = qsnapshot[2][3]
             stats["tqpressure"]  = qsnapshot[0]/tql     if qsnapshot[0]    else 0
             stats["dqpressure"]  = qsnapshot[1][0]/dql  if qsnapshot[1][0] else 0
             stats["aqpressure"]  = qsnapshot[1][1]/aql  if qsnapshot[1][1] else 0
