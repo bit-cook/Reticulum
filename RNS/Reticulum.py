@@ -284,6 +284,10 @@ class Reticulum:
         Reticulum.__ic_held_release_interval          = None
         Reticulum.__ec_pr_freq                        = None
         Reticulum.__egress_control                    = None
+        Reticulum.__inbound_data_queue_length         = None
+        Reticulum.__inbound_announce_queue_length     = None
+        Reticulum.__inbound_pr_queue_length           = None
+        Reticulum.__inbound_il_queue_length           = None
 
         Reticulum.panic_on_interface_error = False
 
@@ -695,6 +699,22 @@ class Reticulum:
                 if option == "ic_held_release_interval":
                     v = self.config["reticulum"].as_float(option)
                     if v >= 0: Reticulum.__ic_held_release_interval = v
+
+                if option == "qlen_in_data":
+                    v = self.config["reticulum"].as_int(option)
+                    if v > 0: Reticulum.__inbound_data_queue_length = v
+
+                if option == "qlen_in_announce":
+                    v = self.config["reticulum"].as_int(option)
+                    if v > 0: Reticulum.__inbound_announce_queue_length = v
+
+                if option == "qlen_in_pr":
+                    v = self.config["reticulum"].as_int(option)
+                    if v > 0: Reticulum.__inbound_pr_queue_length = v
+
+                if option == "qlen_in_il":
+                    v = self.config["reticulum"].as_int(option)
+                    if v > 0: Reticulum.__inbound_il_queue_length = v
 
 
         if RNS.compiled: RNS.log("Reticulum running in compiled mode", RNS.LOG_DEBUG)
@@ -1899,6 +1919,22 @@ class Reticulum:
     @staticmethod
     def local_hops_delta():
         return Reticulum.__local_hops_delta
+
+    @staticmethod
+    def default_data_queue_length():
+        return Reticulum.__inbound_data_queue_length
+
+    @staticmethod
+    def default_announce_queue_length():
+        return Reticulum.__inbound_announce_queue_length
+
+    @staticmethod
+    def default_pr_queue_length():
+        return Reticulum.__inbound_pr_queue_length
+
+    @staticmethod
+    def default_il_queue_length():
+        return Reticulum.__inbound_il_queue_length
 
 # Default configuration file:
 __default_rns_config__ = '''# This is the default Reticulum config file.

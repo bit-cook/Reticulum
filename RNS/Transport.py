@@ -131,11 +131,11 @@ class Transport:
 
     USE_INBOUND_QUEUE           = True
     USE_OUTBOUND_QUEUE          = False
-    INBOUND_DA_QUEUE_LENGTH     = 8192
-    INBOUND_AN_QUEUE_LENGTH     = 1024
-    INBOUND_PR_QUEUE_LENGTH     = 1024
-    INBOUND_IL_QUEUE_LENGTH     = 256
-    OUTBOUND_QUEUE_LENGTH       = 32768
+    INBOUND_DA_QUEUE_LENGTH     = 4096
+    INBOUND_AN_QUEUE_LENGTH     = 256
+    INBOUND_PR_QUEUE_LENGTH     = 256
+    INBOUND_IL_QUEUE_LENGTH     = 128
+    OUTBOUND_QUEUE_LENGTH       = 4096
 
     STATE_UNKNOWN               = 0x00
     STATE_UNRESPONSIVE          = 0x01
@@ -184,10 +184,7 @@ class Transport:
     max_queued_discovery_prs    = 32           # Maximum amount of queued discovery path requests
     pr_destination_hash         = None         # Destination hash of the local path request destination
 
-    inbound_queues              = InboundQueues((INBOUND_DA_QUEUE_LENGTH,
-                                                 INBOUND_AN_QUEUE_LENGTH,
-                                                 INBOUND_PR_QUEUE_LENGTH,
-                                                 INBOUND_IL_QUEUE_LENGTH))
+    inbound_queues              = None
     interfaces_lock             = Lock()
     destinations_lock           = Lock()
     destinations_map_lock       = Lock()
@@ -278,6 +275,15 @@ class Transport:
     @staticmethod
     def start(reticulum_instance):
         Transport.owner = reticulum_instance
+
+        Transport.INBOUND_DA_QUEUE_LENGTH = RNS.Reticulum.default_data_queue_length()     or Transport.INBOUND_DA_QUEUE_LENGTH
+        Transport.INBOUND_AN_QUEUE_LENGTH = RNS.Reticulum.default_announce_queue_length() or Transport.INBOUND_AN_QUEUE_LENGTH
+        Transport.INBOUND_PR_QUEUE_LENGTH = RNS.Reticulum.default_pr_queue_length()       or Transport.INBOUND_PR_QUEUE_LENGTH
+        Transport.INBOUND_IL_QUEUE_LENGTH = RNS.Reticulum.default_il_queue_length()       or Transport.INBOUND_IL_QUEUE_LENGTH
+        Transport.inbound_queues = InboundQueues((Transport.INBOUND_DA_QUEUE_LENGTH,
+                                                  Transport.INBOUND_AN_QUEUE_LENGTH,
+                                                  Transport.INBOUND_PR_QUEUE_LENGTH,
+                                                  Transport.INBOUND_IL_QUEUE_LENGTH))
 
         if Transport.identity == None:
             transport_identity_path = RNS.Reticulum.storagepath+"/transport_identity"
@@ -1519,7 +1525,7 @@ class Transport:
         return False
 
     @staticmethod
-    def inbound(raw, interface=None):
+    def inbound(raw, interface=None, tc=None):
         if not Transport.ready:
             wait_start = time.time()
             while not Transport.ready:
@@ -1584,14 +1590,14 @@ class Transport:
         packet = RNS.Packet(None, raw)
         if not packet.unpack(): return
         if not Transport.packet_filter(packet): return
-        traffic_class = Transport.TC_DATA
+        traffic_class = tc or Transport.TC_DATA
 
         packet.receiving_interface = interface
         packet.hops += 1
 
         # Ingress limit announces early
         if packet.packet_type == RNS.Packet.ANNOUNCE:
-            traffic_class = Transport.TC_ANNOUNCE
+            if not tc: traffic_class = Transport.TC_ANNOUNCE
             announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
             if not announce_signature_valid: return
             elif packet.receiving_interface != None: packet.receiving_interface.received_announce()
