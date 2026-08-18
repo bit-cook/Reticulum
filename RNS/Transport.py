@@ -1110,8 +1110,9 @@ class Transport:
 
         if path_requests:
             with Transport.discovery_pr_tx_lock:
+                queued_destinations = [entry[0] for entry in Transport.pending_discovery_prs]
                 for destination_hash in path_requests:
-                    if not destination_hash in Transport.pending_discovery_prs:
+                    if destination_hash not in queued_destinations:
                         if not len(Transport.pending_discovery_prs) >= Transport.max_queued_discovery_prs:
                             Transport.pending_discovery_prs.append([destination_hash, path_requests[destination_hash]])
 
