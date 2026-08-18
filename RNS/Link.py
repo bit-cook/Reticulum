@@ -928,6 +928,13 @@ class Link:
 
     def receive(self, packet):
         self.watchdog_lock = True
+        try: self.__receive(packet)
+        except Exception as e:
+            RNS.log(f"Error while receiving a packet: {e}", RNS.LOG_ERROR)
+            RNS.trace_exception(e)
+        finally: self.watchdog_lock = False
+
+    def __receive(self, packet):
         if not self.status == Link.CLOSED and not (self.initiator and packet.context == RNS.Packet.KEEPALIVE and packet.data == bytes([0xFF])):
             if packet.receiving_interface != self.attached_interface:
                 RNS.log(f"Link-associated packet received on unexpected interface {packet.receiving_interface} instead of {self.attached_interface}! Someone might be trying to manipulate your communication!", RNS.LOG_ERROR)
@@ -1155,8 +1162,6 @@ class Link:
                                 def job(resource=resource): resource.validate_proof(packet.data)
                                 threading.Thread(target=job, daemon=True).start()
                                 self.__update_phy_stats(packet, query_shared=True)
-
-        self.watchdog_lock = False
 
     def encrypt(self, plaintext):
         try:
