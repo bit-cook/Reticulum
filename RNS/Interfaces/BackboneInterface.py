@@ -176,6 +176,7 @@ class BackboneInterface(Interface):
     def ic_burst_count(self):
         if time.time() > self.__last_ic_burst_count_check + 2:
             self.__last_ic_burst_count_state = len([i.ic_burst_active for i in self.spawned_interfaces if i.ic_burst_active])
+            self.__last_ic_burst_count_check = time.time()
 
         return self.__last_ic_burst_count_state
 
@@ -185,6 +186,7 @@ class BackboneInterface(Interface):
     def ic_pr_burst_count(self):
         if time.time() > self.__last_ic_pr_burst_count_check + 2:
             self.__last_ic_pr_burst_count_state = len([i.ic_pr_burst_active for i in self.spawned_interfaces if i.ic_pr_burst_active])
+            self.__last_ic_pr_burst_count_check = time.time()
 
         return self.__last_ic_pr_burst_count_state
 
@@ -194,6 +196,7 @@ class BackboneInterface(Interface):
     def ic_burst_active(self):
         if time.time() > self.__last_ic_burst_check + 2:
             self.__last_ic_burst_state = any(i.ic_burst_active for i in self.spawned_interfaces)
+            self.__last_ic_burst_check = time.time()
 
         return self.__last_ic_burst_state
 
@@ -207,6 +210,7 @@ class BackboneInterface(Interface):
         if time.time() > self.__ic_burst_activated_check + 2:
             activated = [i.ic_burst_activated for i in self.spawned_interfaces if i.ic_burst_active]
             if activated: self.__ic_burst_activated = min(activated)
+            self.__ic_burst_activated_check = time.time()
 
         return self.__ic_burst_activated
 
@@ -220,6 +224,7 @@ class BackboneInterface(Interface):
     def ic_pr_burst_active(self):
         if time.time() > self.__last_ic_pr_burst_check + 2:
             self.__last_ic_pr_burst_state = any(i.ic_pr_burst_active for i in self.spawned_interfaces)
+            self.__last_ic_pr_burst_check = time.time()
 
         return self.__last_ic_pr_burst_state
 
@@ -233,6 +238,7 @@ class BackboneInterface(Interface):
         if time.time() > self.__ic_pr_burst_activated_check + 2:
             activated = [i.ic_pr_burst_activated for i in self.spawned_interfaces if i.ic_pr_burst_active]
             if activated: self.__ic_pr_burst_activated = min(activated)
+            self.__ic_pr_burst_activated_check = time.time()
 
         return self.__ic_pr_burst_activated
 
