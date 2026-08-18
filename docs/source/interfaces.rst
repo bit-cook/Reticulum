@@ -1583,7 +1583,7 @@ Reticulum uses separate, prioritized queues for processing inbound packets. The 
 
  4. Ingress-limited traffic
 
-You can tune the queue sizes from the defaults, for example if you're setup where you want to simply drop most traffic from ingress-limited interfaces. The queue sizes are configured in the ``[reticulum]`` section of the config
+You can tune the queue sizes from the defaults, for example if you're running a setup where you want to simply drop most traffic from ingress-limited interfaces. The queue sizes are configured in the ``[reticulum]`` section of the config
 
  * | The ``qlen_in_data`` option sets the maximum size of the data
      queue. Defaults to ``4096``.
