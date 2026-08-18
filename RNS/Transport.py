@@ -1657,6 +1657,7 @@ class Transport:
 
         if not Transport.USE_INBOUND_QUEUE: return Transport._inbound(packet)
         else:
+            if traffic_class == Transport.TC_INGRESS_LIMITED: packet.traffic_class = Transport.TC_INGRESS_LIMITED
             try: Transport.inbound_queues.put(traffic_class, packet, block=False)
             except Full: RNS.log(f"Dropping inbound packet, queue is full (tc={traffic_class})", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
             except Exception as e: RNS.log(f"Error while inserting into inbound queue: {e}", RNS.LOG_ERROR)
@@ -3147,19 +3148,20 @@ class Transport:
                                            Transport.from_local_client(packet),
                                            packet.receiving_interface,
                                            requestor_transport_id = requesting_transport_instance,
-                                           tag=tag_bytes)
+                                           tag=tag_bytes,
+                                           ingress_limited=packet.traffic_class == Transport.TC_INGRESS_LIMITED)
 
                 else: RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
         except Exception as e: RNS.log(f"Error while handling path request. The contained exception was: {e}", RNS.LOG_ERROR)
 
     @staticmethod
-    def path_request(destination_hash, is_from_local_client, attached_interface, requestor_transport_id=None, tag=None):
+    def path_request(destination_hash, is_from_local_client, attached_interface, requestor_transport_id=None, tag=None, ingress_limited=False):
         should_search_for_unknown = False
         should_ingress_limit      = False
         search_mode_filter        = None
 
         if attached_interface != None:
-            should_ingress_limit = attached_interface.should_ingress_limit_pr()
+            should_ingress_limit = ingress_limited or attached_interface.should_ingress_limit_pr()
             if RNS.Reticulum.transport_enabled():
                 if attached_interface.recursive_prs: should_search_for_unknown = True
                 elif attached_interface.mode in RNS.Interfaces.Interface.Interface.DISCOVER_PATHS_FOR: should_search_for_unknown = True

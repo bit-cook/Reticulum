@@ -122,6 +122,7 @@ class Interface:
         self.ic_burst_activated       = 0
         self.ic_pr_burst_active       = False
         self.ic_pr_burst_activated    = 0
+        self.ic_pr_burst_cooldown     = 0
         self.ic_held_release          = 0
         self.ic_max_held_announces    = RNS.Reticulum.get_instance()._default_ic_max_held_announces()
         self.ic_burst_hold            = RNS.Reticulum.get_instance()._default_ic_burst_hold()
@@ -178,7 +179,9 @@ class Interface:
 
             if self.ic_pr_burst_active:
                 if ip_freq < freq_threshold and time.time() > self.ic_pr_burst_activated+self.ic_burst_hold:
-                    self.ic_pr_burst_active = False
+                    if self.ic_pr_burst_cooldown <= 0: self.ic_pr_burst_active = False
+                    else: self.ic_pr_burst_cooldown -= 1
+                else: self.ic_pr_burst_cooldown = 3
 
                 return True
 
@@ -186,6 +189,7 @@ class Interface:
                 if ip_freq > freq_threshold:
                     self.ic_pr_burst_active = True
                     self.ic_pr_burst_activated = time.time()
+                    self.ic_pr_burst_cooldown = 3
                     return True
 
                 else: return False
