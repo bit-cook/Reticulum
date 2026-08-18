@@ -1503,10 +1503,10 @@ You can tune the queue sizes from the defaults, for example if you’re running 
 > * The `qlen_in_announce` option sets the maximum size of the announce
 >   queue. Defaults to `256`.
 >   
-> * The `qlen_in_pr` option sets the maximum size of the data
+> * The `qlen_in_pr` option sets the maximum size of the path request
 >   queue. Defaults to `256`.
 >   
-> * The `qlen_in_il` option sets the maximum size of the data
+> * The `qlen_in_il` option sets the maximum size of the ingress limiter
 >   queue. Defaults to `128`.
 >   
 
