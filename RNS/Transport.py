@@ -1533,6 +1533,13 @@ class Transport:
 
     @staticmethod
     def inbound(raw, interface=None, tc=None):
+        try: Transport.process_inbound(raw, interface, tc)
+        except Exception as e:
+            RNS.log(f"Error while processing inbound on {interface}: {e}", RNS.LOG_ERROR)
+            RNS.trace_exception(e)
+
+    @staticmethod
+    def process_inbound(raw, interface=None, tc=None):
         if not Transport.ready:
             wait_start = time.time()
             while not Transport.ready:
