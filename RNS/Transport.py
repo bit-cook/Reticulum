@@ -1397,6 +1397,7 @@ class Transport:
                                                 if e["destination"] == packet.destination_hash:
                                                     already_queued = True
                                                     existing_entry = e
+                                                    break
 
                                             emission_timestamp = Transport.announce_emitted(packet)
                                             if already_queued:
