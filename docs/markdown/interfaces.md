@@ -939,6 +939,9 @@ When `discoverable` is enabled, a variety of additional options become available
 `discovery_name`
 : A human-readable name for the interface. This name will be displayed to users on remote systems when they list discovered interfaces. If not specified, the interface name (the section header) will be used.
 
+`discovery_lxmf_address`
+: An optional LXMF address for contacting the operator of this interface. The address will be displayed to users on remote systems when they view details for discovered interfaces. Useful for getting in touch with other operators to interconnect networks with and coordinating network coverage.
+
 `announce_interval`
 : The interval in minutes between successive discovery announces for this interface. Default is 360 minutes (6 hours). For stable, long-running infrastructure, higher intervals (12 to 22 hours) are usually sufficient and reduce network load. Minimum allowed value is 5 minutes (but expect to have your announces throttled if using intervals below one hour).
 
