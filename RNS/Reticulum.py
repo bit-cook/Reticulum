@@ -540,7 +540,8 @@ class Reticulum:
                 
                 if option == "link_mtu_discovery":
                     v = self.config["reticulum"].as_bool(option)
-                    if v == True: Reticulum.__link_mtu_discovery = True
+                    if   v == True:  Reticulum.__link_mtu_discovery = True
+                    elif v == False: Reticulum.__link_mtu_discovery = False
                 
                 if option == "enable_remote_management":
                     v = self.config["reticulum"].as_bool(option)
