@@ -267,6 +267,8 @@ class Transport:
     speed_rx                    = 0
     speed_tx                    = 0
     traffic_captured            = None
+    lowest_interface_bitrate    = None
+    highest_interface_bitrate   = None
 
     identity                    = None
     network_identity            = None
@@ -537,6 +539,10 @@ class Transport:
         with Transport.interfaces_lock:
             try: Transport.interfaces.sort(key=lambda interface: interface.bitrate, reverse=True)
             except Exception as e: RNS.log(f"Could not prioritize interfaces according to bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
+            try: Transport.lowest_interface_bitrate = min((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
+            except Exception as e: RNS.log(f"Could not get lowest interface bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
+            try: Transport.highest_interface_bitrate = max((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
+            except Exception as e: RNS.log(f"Could not get highest interface bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
 
     @staticmethod
     def enable_discovery():
@@ -3285,9 +3291,15 @@ class Transport:
                     return
 
                 # Forward path request on all interfaces
-                # except the requestor interface
+                # except the requestor interface. The discovery
+                # timeout must also cover a full round trip for
+                # an MTU on the slowest online interface.
+                if not Transport.lowest_interface_bitrate: medium_timeout = None
+                else: medium_timeout = 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
+                discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
+
                 RNS.log("Attempting to discover unknown path to "+RNS.prettyhexrep(destination_hash)+" on behalf of path request"+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
-                pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+Transport.PATH_REQUEST_TIMEOUT, "requesting_interface": attached_interface }
+                pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout, "requesting_interface": attached_interface }
                 with Transport.discovery_pr_lock: Transport.discovery_path_requests[destination_hash] = pr_entry
 
                 for interface in Transport.interfaces:
