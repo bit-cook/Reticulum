@@ -69,9 +69,27 @@ alterations should be made on a per-interface basis instead.
 Minimum bitrate required across a medium for Reticulum to be able
 to successfully establish links. Currently 5 bits per second.
 
+#### `DEFAULT_PER_HOP_TIMEOUT = 6`
+
+The default per-hop timeout value used in various timeout calculations.
+
 #### `static get_instance()`
 
-Return the currently running Reticulum instance
+Returns the currently running Reticulum instance.
+
+#### `get_first_hop_timeout(destination)`
+
+Returns a best-effort estimate of a reasonable minimum
+*first-hop* timeout value for a given destination hash.
+If a path is known, this calculation takes the next-hop
+interface’s bitrate into account. If no path is currently
+known, returns `DEFAULT_PER_HOP_TIMEOUT`.
+
+* **Parameters:**
+  **destination** – A destination hash, as *bytes*.
+
+* **Returns:**
+  First-hop timeout, in seconds.
 
 #### `static should_use_implicit_proof()`
 

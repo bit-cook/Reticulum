@@ -140,6 +140,9 @@ class Reticulum:
     # TODO: Let Reticulum somehow continously build a map of per-hop
     # latencies and use this map for global timeout calculation.
     DEFAULT_PER_HOP_TIMEOUT = 6
+    """
+    The default per-hop timeout value used in various timeout calculations.
+    """
 
     # Length of truncated hashes in bits.
     TRUNCATED_HASHLENGTH = 128
@@ -207,7 +210,7 @@ class Reticulum:
     @staticmethod
     def get_instance():
         """
-        Return the currently running Reticulum instance
+        Returns the currently running Reticulum instance.
         """
         return Reticulum.__instance
 
@@ -1655,6 +1658,16 @@ class Reticulum:
             return str(RNS.Transport.next_hop_interface(destination))
 
     def get_first_hop_timeout(self, destination):
+        """
+        Returns a best-effort estimate of a reasonable minimum
+        *first-hop* timeout value for a given destination hash.
+        If a path is known, this calculation takes the next-hop
+        interface's bitrate into account. If no path is currently
+        known, returns ``DEFAULT_PER_HOP_TIMEOUT``.
+
+        :param destination: A destination hash, as *bytes*.
+        :returns: First-hop timeout, in seconds.
+        """
         if self.is_connected_to_shared_instance:
             try:
                 rpc_connection = self.get_rpc_client()
