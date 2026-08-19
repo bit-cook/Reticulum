@@ -930,7 +930,7 @@ class Link:
         self.watchdog_lock = True
         try: self.__receive(packet)
         except Exception as e:
-            RNS.log(f"Error while receiving a packet: {e}", RNS.LOG_ERROR)
+            RNS.log(f"Error on {self} while receiving packet: {e}", RNS.LOG_ERROR)
             RNS.trace_exception(e)
         finally: self.watchdog_lock = False
 
