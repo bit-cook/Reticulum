@@ -169,12 +169,12 @@ class BackboneInterface(Interface):
         else:
             raise SystemError("Insufficient parameters to create listener")
 
-
+    __ic_burst_stats_throttle = 0.95
     __last_ic_burst_count_check = 0
     __last_ic_burst_count_state = 0
     @property
     def ic_burst_count(self):
-        if time.time() > self.__last_ic_burst_count_check + 2:
+        if time.time() > self.__last_ic_burst_count_check + self.__ic_burst_stats_throttle:
             self.__last_ic_burst_count_state = len([i.ic_burst_active for i in self.spawned_interfaces if i.ic_burst_active])
             self.__last_ic_burst_count_check = time.time()
 
@@ -184,7 +184,7 @@ class BackboneInterface(Interface):
     __last_ic_pr_burst_count_state = 0
     @property
     def ic_pr_burst_count(self):
-        if time.time() > self.__last_ic_pr_burst_count_check + 2:
+        if time.time() > self.__last_ic_pr_burst_count_check + self.__ic_burst_stats_throttle:
             self.__last_ic_pr_burst_count_state = len([i.ic_pr_burst_active for i in self.spawned_interfaces if i.ic_pr_burst_active])
             self.__last_ic_pr_burst_count_check = time.time()
 
@@ -194,7 +194,7 @@ class BackboneInterface(Interface):
     __last_ic_burst_state = False
     @property
     def ic_burst_active(self):
-        if time.time() > self.__last_ic_burst_check + 2:
+        if time.time() > self.__last_ic_burst_check + self.__ic_burst_stats_throttle:
             self.__last_ic_burst_state = any(i.ic_burst_active for i in self.spawned_interfaces)
             self.__last_ic_burst_check = time.time()
 
@@ -207,7 +207,7 @@ class BackboneInterface(Interface):
     __ic_burst_activated       = 0
     @property
     def ic_burst_activated(self):
-        if time.time() > self.__ic_burst_activated_check + 2:
+        if time.time() > self.__ic_burst_activated_check + self.__ic_burst_stats_throttle:
             activated = [i.ic_burst_activated for i in self.spawned_interfaces if i.ic_burst_active]
             if activated: self.__ic_burst_activated = min(activated)
             self.__ic_burst_activated_check = time.time()
@@ -222,7 +222,7 @@ class BackboneInterface(Interface):
     __last_ic_pr_burst_state = False
     @property
     def ic_pr_burst_active(self):
-        if time.time() > self.__last_ic_pr_burst_check + 2:
+        if time.time() > self.__last_ic_pr_burst_check + self.__ic_burst_stats_throttle:
             self.__last_ic_pr_burst_state = any(i.ic_pr_burst_active for i in self.spawned_interfaces)
             self.__last_ic_pr_burst_check = time.time()
 
@@ -235,7 +235,7 @@ class BackboneInterface(Interface):
     __ic_pr_burst_activated       = 0
     @property
     def ic_pr_burst_activated(self):
-        if time.time() > self.__ic_pr_burst_activated_check + 2:
+        if time.time() > self.__ic_pr_burst_activated_check + self.__ic_burst_stats_throttle:
             activated = [i.ic_pr_burst_activated for i in self.spawned_interfaces if i.ic_pr_burst_active]
             if activated: self.__ic_pr_burst_activated = min(activated)
             self.__ic_pr_burst_activated_check = time.time()
