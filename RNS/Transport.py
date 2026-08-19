@@ -1827,7 +1827,7 @@ class Transport:
 
                         if packet.packet_type == RNS.Packet.LINKREQUEST:
                             now = time.time()
-                            proof_timeout  = Transport.extra_link_proof_timeout(packet.receiving_interface)
+                            proof_timeout  = Transport.extra_link_proof_timeout(outbound_interface)
                             proof_timeout += now + RNS.Link.ESTABLISHMENT_TIMEOUT_PER_HOP * max(1, remaining_hops)
                             
                             path_mtu       = RNS.Link.mtu_from_lr_packet(packet)
