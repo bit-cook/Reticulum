@@ -36,6 +36,9 @@ import datetime
 import random
 import threading
 
+from collections import deque
+from threading import Lock, Condition
+
 from ._version import __version__
 
 from .Reticulum import Reticulum
@@ -94,8 +97,6 @@ instance_random.seed(os.urandom(10))
 
 _always_override_destination = False
 
-logging_lock = threading.Lock()
-
 def loglevelname(level):
     if (level == LOG_CRITICAL): return "[Critical]"
     if (level == LOG_ERROR):    return "[Error]   "
@@ -123,54 +124,97 @@ def timestamp_str(time_s):
 def precise_timestamp_str(time_s):
     return datetime.datetime.now().strftime(logtimefmt_p)[:-3]
 
+_log_thread      = None
+_log_thread_lock = Lock()
+_log_queue       = deque()
+_log_cond        = Condition()
+def _ensure_log_thread():
+    global _log_thread
+    if _log_thread is None or not _log_thread.is_alive():
+        _log_thread = threading.Thread(target=_log_job, daemon=True)
+        _log_thread.start()
+
 def sl(level=3): return loglevel >= level
 def log(msg, level=3, _override_destination = False, pt=False):
+    global compact_log_fmt
+
     if loglevel == LOG_NONE: return
-    global _always_override_destination, compact_log_fmt
+    _ensure_log_thread()
+
     msg = str(msg)
     if loglevel >= level:
-        if pt: logstring = "["+precise_timestamp_str(time.time())+"] "+loglevelname(level)+" "+msg
-        else:
-            if not compact_log_fmt: logstring = ("["+timestamp_str(time.time())+"] " if logtimestamps else "")+loglevelname(level)+" "+msg
-            else:                   logstring = ("["+timestamp_str(time.time())+"] " if logtimestamps else "")+msg
+        with _log_cond:
+            if pt: logstring = "["+precise_timestamp_str(time.time())+"] "+loglevelname(level)+" "+msg
+            else:
+                if not compact_log_fmt: logstring = ("["+timestamp_str(time.time())+"] " if logtimestamps else "")+loglevelname(level)+" "+msg
+                else:                   logstring = ("["+timestamp_str(time.time())+"] " if logtimestamps else "")+msg
 
-        with logging_lock:
-            if (logdest == LOG_STDOUT or _always_override_destination or _override_destination):
-                if not threading.main_thread().is_alive(): return
-                else:
-                    try: print(logstring)
-                    except: pass
+            _log_queue.append((logstring, level, _override_destination))
+            _log_cond.notify()
 
-            elif (logdest == LOG_FILE and logfile != None):
-                try:
-                    with open(logfile, "a") as file: file.write(logstring+"\n")
-                    if os.path.getsize(logfile) > LOG_MAXSIZE:
-                        for i in range(LOG_MAXROT, 0, -1):
-                            oldfile = f"{logfile}.{i}"
-                            if os.path.isfile(oldfile):
-                                if i == LOG_MAXROT:
-                                    os.unlink(oldfile)
-                                else:
-                                    rotfile = f"{logfile}.{i+1}"
-                                    os.rename(oldfile, rotfile)
+def _log_job():
+    global _always_override_destination
 
-                        rotfile = f"{logfile}.1"
-                        os.rename(logfile, rotfile)
+    if not _log_thread_lock.acquire(blocking=False): return
+    try:
+        file = None
+        if (logdest == LOG_FILE and logfile != None):
+            try:
+                file = open(logfile, "a", buffering=1)
+            except Exception as e:
+                _always_override_destination = True
+                log("Exception occurred while opening log file: "+str(e), LOG_CRITICAL)
+                log("Dumping future log events to console!", LOG_CRITICAL)
 
-                except Exception as e:
-                    _always_override_destination = True
-                    log("Exception occurred while writing log message to log file: "+str(e), LOG_CRITICAL)
-                    log("Dumping future log events to console!", LOG_CRITICAL)
-                    log(msg, level)
+            while True:
+                with _log_cond:
+                    try:
+                        logstring, level, _override_destination = _log_queue.popleft()
+                    except IndexError as e:
+                        _log_cond.wait()
+                        continue
 
-            elif logdest == LOG_CALLBACK:
-                try: logcall(logstring)
-                except Exception as e:
-                    _always_override_destination = True
-                    log("Exception occurred while calling external log handler: "+str(e), LOG_CRITICAL)
-                    log("Dumping future log events to console!", LOG_CRITICAL)
-                    log(msg, level)
-                
+                if (logdest == LOG_STDOUT or _always_override_destination or _override_destination):
+                    if not threading.main_thread().is_alive(): return
+                    else:
+                        try: print(logstring)
+                        except: pass
+
+                elif (logdest == LOG_FILE and logfile != None and file != None):
+                    try:
+                        file.write(logstring+"\n")
+                        if os.path.getsize(logfile) > LOG_MAXSIZE:
+                            file.close()
+                            for i in range(LOG_MAXROT, 0, -1):
+                                oldfile = f"{logfile}.{i}"
+                                if os.path.isfile(oldfile):
+                                    if i == LOG_MAXROT:
+                                        os.unlink(oldfile)
+                                    else:
+                                        rotfile = f"{logfile}.{i+1}"
+                                        os.rename(oldfile, rotfile)
+
+                            rotfile = f"{logfile}.1"
+                            os.rename(logfile, rotfile)
+                            file = open(logfile, "a", buffering=1)
+
+                    except Exception as e:
+                        _always_override_destination = True
+                        log("Exception occurred while writing log message to log file: "+str(e), LOG_CRITICAL)
+                        log("Dumping future log events to console!", LOG_CRITICAL)
+                        log(msg, level)
+
+                elif logdest == LOG_CALLBACK:
+                    try: logcall(logstring)
+                    except Exception as e:
+                        _always_override_destination = True
+                        log("Exception occurred while calling external log handler: "+str(e), LOG_CRITICAL)
+                        log("Dumping future log events to console!", LOG_CRITICAL)
+                        log(msg, level)
+
+    finally:
+        if file is not None: file.close()
+        _log_thread_lock.release()
 
 def rand():
     result = instance_random.random()
