@@ -2963,7 +2963,7 @@ class Transport:
 
     @staticmethod
     def extra_link_proof_timeout(interface):
-        if interface != None: return ((1/interface.bitrate)*8)*RNS.Reticulum.MTU
+        if interface != None and interface.bitrate: return ((1/interface.bitrate)*8)*RNS.Reticulum.MTU
         else: return 0
 
     @staticmethod
