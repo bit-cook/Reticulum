@@ -290,7 +290,7 @@ class BackboneInterface(Interface):
 
         try: BackboneInterface.epoll.register(fileno, select.EPOLLIN)
         except Exception as e:
-            RNS.log(f"An error occurred while registering EPOLL_IN for file descriptor {fileno}: {e}", RNS.LOG_WARNING)
+            RNS.log(f"An error occurred while registering EPOLLIN for file descriptor {fileno}: {e}", RNS.LOG_WARNING)
 
     @staticmethod
     def deregister_fileno(fileno):
