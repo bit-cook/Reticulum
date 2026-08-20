@@ -129,7 +129,7 @@ class Transport:
     LOCAL_REBROADCASTS_MAX      = 2            # How many local rebroadcasts of an announce is allowed
 
     PATH_REQUEST_TIMEOUT        = 15           # Default timeout for client path requests in seconds
-    PATH_REQUEST_GATE_TIMEOUT   = 120          # Default timeout for client path request gate control in seconds
+    PATH_REQUEST_GATE_TIMEOUT   = 45           # Default timeout for client path request gate control in seconds
     PATH_REQUEST_GRACE          = 0.4          # Grace time before a path announcement is made, allows directly reachable peers to respond first
     PATH_REQUEST_RG             = 1.5          # Extra grace time for roaming-mode interfaces to allow more suitable peers to respond first
     PATH_REQUEST_MI             = 20           # Minimum interval in seconds for automated path requests
@@ -186,7 +186,7 @@ class Transport:
     discovery_path_requests     = {}           # A table for keeping track of path requests on behalf of other nodes
     discovery_pr_tags           = set()        # A table for keeping track of tagged path requests
     discovery_pr_tags_prev      = set()
-    max_pr_tags                 = 32000        # Maximum amount of unique path request tags to remember
+    max_pr_tags                 = 8192         # Maximum amount of unique path request tags to remember
     max_queued_discovery_prs    = 32           # Maximum amount of queued discovery path requests
     pr_destination_hash         = None         # Destination hash of the local path request destination
 
@@ -895,15 +895,15 @@ class Transport:
 
                     # Cull the pending path requests table
                     stale_path_requests = []
-                    with Transport.path_requests_lock:
-                        try:
-                            for destination_hash in Transport.path_requests:
-                                if time.time() > Transport.path_requests[destination_hash] + Transport.PATH_REQUEST_GATE_TIMEOUT:
-                                    stale_path_requests.append(destination_hash)
-                                    RNS.log("Path request entry for "+RNS.prettyhexrep(destination_hash)+" timed out and was removed", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+                    try:
+                        path_requests_snapshot = Transport.path_requests.copy()
+                        for destination_hash in path_requests_snapshot:
+                            if time.time() > path_requests_snapshot[destination_hash] + Transport.PATH_REQUEST_GATE_TIMEOUT:
+                                stale_path_requests.append(destination_hash)
+                                RNS.log("Path request entry for "+RNS.prettyhexrep(destination_hash)+" timed out and was removed", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
 
-                        except Exception as e:
-                            RNS.log(f"Could not complete stale path request enumeration in this job round, retrying later: {e}", RNS.LOG_WARNING)
+                    except Exception as e:
+                        RNS.log(f"Could not complete stale path request enumeration in this job round, retrying later: {e}", RNS.LOG_WARNING)
 
                     # Cull the pending discovery path requests table
                     stale_discovery_path_requests = []
@@ -1112,22 +1112,26 @@ class Transport:
             RNS.log("An exception occurred while running Transport jobs.", RNS.LOG_ERROR)
             RNS.log("The contained exception was: "+str(e), RNS.LOG_ERROR)
 
-        if outgoing:
-            def job(): Transport.handle_outgoing_announces(outgoing)
-            threading.Thread(target=job).start()
+        try:
+            if outgoing:
+                def job(): Transport.handle_outgoing_announces(outgoing)
+                threading.Thread(target=job).start()
 
-        if path_requests:
-            with Transport.discovery_pr_tx_lock:
-                queued_destinations = [entry[0] for entry in Transport.pending_discovery_prs]
-                for destination_hash in path_requests:
-                    if destination_hash not in queued_destinations:
-                        if not len(Transport.pending_discovery_prs) >= Transport.max_queued_discovery_prs:
-                            Transport.pending_discovery_prs.append([destination_hash, path_requests[destination_hash]])
+            if path_requests:
+                with Transport.discovery_pr_tx_lock:
+                    queued_destinations = [entry[0] for entry in Transport.pending_discovery_prs]
+                    for destination_hash in path_requests:
+                        if destination_hash not in queued_destinations:
+                            if not len(Transport.pending_discovery_prs) >= Transport.max_queued_discovery_prs:
+                                Transport.pending_discovery_prs.append([destination_hash, path_requests[destination_hash]])
 
-        if len(Transport.pending_discovery_prs):
-            def job(): Transport.handle_disovery_path_requests()
-            threading.Thread(target=job).start()
+            if len(Transport.pending_discovery_prs):
+                def job(): Transport.handle_disovery_path_requests()
+                threading.Thread(target=job).start()
 
+        except Exception as e:
+            RNS.log(f"Error while finalizing transport jobs: {e}", RNS.LOG_ERROR)
+            RNS.trace_exception(e)
 
     discovery_pr_tx_throttle = 0.5
     discovery_pr_tx_lock     = Lock()
@@ -1664,6 +1668,17 @@ class Transport:
                     if not tag_valid:
                         RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                         return
+
+                    # Early registration to immediately hold duplicates
+                    path_request_inflight = False
+                    with Transport.path_requests_lock:
+                        if destination_hash in Transport.path_requests: path_request_inflight = True
+
+                    if not path_request_inflight:
+                        with Transport.path_requests_lock: Transport.path_requests[destination_hash] = time.time()
+                    # else:
+                    #     # TODO: Implement
+                    #     return
 
                     # TODO: Add early filtering here for non-transport nodes; there's no
                     # reason to process further if we know we don't have the destination
@@ -3073,9 +3088,8 @@ class Transport:
                     on_interface.announce_allowed_at = now + wait_time
 
         packet.is_outbound_pr = True
-        packet.send()
-
         with Transport.path_requests_lock: Transport.path_requests[destination_hash] = time.time()
+        packet.send()
 
     @staticmethod
     def remote_status_handler(path, data, request_id, link_id, remote_identity, requested_at):
