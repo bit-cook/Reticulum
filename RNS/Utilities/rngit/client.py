@@ -291,6 +291,8 @@ class ReticulumGitClient():
 
         if hasattr(self.request_response, "read") and callable(self.request_response.read):
             response_path = self.request_response.name
+            try: self.request_response.close()
+            except Exception as e: RNS.log(f"Could not close resource file descriptor before retain: {e}", RNS.LOG_ERROR)
             base_name = os.path.basename(response_path)
             retained_path = os.path.join(self.tmp_dir.name, base_name)
             shutil.move(response_path, retained_path)
