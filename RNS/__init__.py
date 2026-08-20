@@ -41,21 +41,6 @@ from threading import Lock, Condition
 
 from ._version import __version__
 
-from .Reticulum import Reticulum
-from .Identity import Identity
-from .Link import Link, RequestReceipt
-from .Channel import MessageBase
-from .Buffer import Buffer, RawChannelReader, RawChannelWriter
-from .Transport import Transport
-from .Discovery import InterfaceAnnouncer
-from .Destination import Destination
-from .Packet import Packet
-from .Packet import PacketReceipt
-from .Resolver import Resolver
-from .Resource import Resource, ResourceAdvertisement
-from .Cryptography import HKDF
-from .Cryptography import Hashes
-
 py_modules  = glob.glob(os.path.dirname(__file__)+"/*.py")
 pyc_modules = glob.glob(os.path.dirname(__file__)+"/*.pyc")
 modules     = py_modules+pyc_modules
@@ -492,7 +477,7 @@ class Profiler:
         from statistics import mean, median, stdev
         results = {}
         
-        for tag in Profiler.tags:
+        for tag in sorted(Profiler.tags):
             tag_captures = []
             tag_entry = Profiler.tags[tag]
             
@@ -534,33 +519,41 @@ class Profiler:
 
             results[tag] = tag_results
 
+        return results
+
+    @staticmethod
+    def format_results(results):
         def print_results_recursive(tag, results, level=0):
-            print_tag_results(tag, level+1)
+            results_str = print_tag_results(tag, level+1) + "\n"
 
             for tag_name in results:
                 sub_tag = results[tag_name]
                 if sub_tag["super"] == tag["name"]:
-                    print_results_recursive(sub_tag, results, level=level+1)
+                    results_str += print_results_recursive(sub_tag, results, level=level+1)
+
+            return results_str
 
 
         def print_tag_results(tag, level):
             ind = "  "*level
             name = tag["name"]; count = tag["count"]
             mean = tag["mean"]; median = tag["median"]; stdev = tag["stdev"]
-            print(    f"{ind}{name}")
-            print(    f"{ind}  Samples  : {count}")
+            results_str  =     f" {ind}{name}\n"
+            results_str +=     f" {ind}  Samples  : {count}\n"
             if stdev != None:
-                print(f"{ind}  Mean     : {prettyshorttime(mean)}")
-                print(f"{ind}  Median   : {prettyshorttime(median)}")
-                print(f"{ind}  St.dev.  : {prettyshorttime(stdev)}")
-            print(    f"{ind}  Total    : {prettyshorttime(mean*count)}")
-            print("")
+                results_str += f" {ind}  Mean     : {prettyshorttime(mean)}\n"
+                results_str += f" {ind}  Median   : {prettyshorttime(median)}\n"
+                results_str += f" {ind}  St.dev.  : {prettyshorttime(stdev)}\n"
+            results_str +=     f" {ind}  Total    : {prettyshorttime(mean*count)}\n"
+            return results_str
 
-        print("\nProfiler results:\n")
+        results_str = ""
         for tag_name in results:
             tag = results[tag_name]
             if tag["super"] == None:
-                print_results_recursive(tag, results)
+                results_str += print_results_recursive(tag, results)
+
+        return results_str
 
 profile = Profiler.get_profiler
 
@@ -610,3 +603,20 @@ def bytes_to_b256(data):
     if not type(data) == bytes: raise TypeError("Invalid input data for base256 encode")
     try: return [byte_to_b256(c) for c in data]
     except Exception as e: raise TypeError(f"Could not encode to base256: {e}")
+
+
+from .Reticulum import Reticulum
+from .Identity import Identity
+from .Link import Link, RequestReceipt
+from .Channel import MessageBase
+from .Buffer import Buffer, RawChannelReader, RawChannelWriter
+from .Transport import Transport
+from .Discovery import InterfaceAnnouncer
+from .Destination import Destination
+from .Packet import Packet
+from .Packet import PacketReceipt
+from .Resolver import Resolver
+from .Resource import Resource, ResourceAdvertisement
+from .Cryptography import HKDF
+from .Cryptography import Hashes
+

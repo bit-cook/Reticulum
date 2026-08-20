@@ -3339,6 +3339,9 @@ class Transport:
                     response.append(Transport.owner.get_interface_stats())
                     if data[0] == True: response.append(Transport.owner.get_link_count())
 
+                    if len(data) >= 2:
+                        if data[1] == True: response.append(Transport.owner.get_profiling_results())
+
                     return response
 
             except Exception as e:

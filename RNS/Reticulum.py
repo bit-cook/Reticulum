@@ -190,8 +190,6 @@ class Reticulum:
             RNS.Transport.exit_handler()
             RNS.Identity.exit_handler()
 
-            if RNS.Profiler.ran(): RNS.Profiler.results()
-
             RNS.loglevel = RNS.LOG_NONE
             RNS._detach_stdout()
 
@@ -1293,6 +1291,7 @@ class Reticulum:
                     if path == "packet_rssi":              self.rpc_return(conn, self.get_packet_rssi(call["packet_hash"]))
                     if path == "packet_snr":               self.rpc_return(conn, self.get_packet_snr(call["packet_hash"]))
                     if path == "packet_q":                 self.rpc_return(conn, self.get_packet_q(call["packet_hash"]))
+                    if path == "profiling_results":     self.rpc_return(conn, self.get_profiling_results())
                     if path == "blackholed_identities":    self.rpc_return(conn, self.get_blackholed_identities())
                     if path == "is_blackholed":            self.rpc_return(conn, self.is_blackholed(call["identity_hash"]))
 
@@ -1847,6 +1846,17 @@ class Reticulum:
                     return entry[1]
 
             return None
+
+    def get_profiling_results(self):
+        if self.is_connected_to_shared_instance:
+            rpc_connection = self.get_rpc_client()
+            rpc_connection.send_bytes(mp.packb({"get": "profiling_results"}))
+            response = mp.unpackb(rpc_connection.recv_bytes())
+            return response
+
+        else:
+            if RNS.Profiler.ran(): return RNS.Profiler.results()
+            else: return None
 
     def halt_interface(self, interface):
         pass
