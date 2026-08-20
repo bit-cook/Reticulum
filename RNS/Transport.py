@@ -1656,7 +1656,6 @@ class Transport:
                     if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
                     unique_tag = destination_hash+tag_bytes
 
-                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
                     with Transport.discovery_pr_tags_lock:
                         if not unique_tag in Transport.discovery_pr_tags and not unique_tag in Transport.discovery_pr_tags_prev:
                             Transport.discovery_pr_tags.add(unique_tag)
@@ -1670,6 +1669,7 @@ class Transport:
                     # reason to process further if we know we don't have the destination
                     # locally on this system. Might need adding a local_client_dest_map.
 
+                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
                     if interface.should_ingress_limit_pr(): traffic_class = Transport.TC_INGRESS_LIMITED
 
         if not Transport.USE_INBOUND_QUEUE: return Transport._inbound(packet)
