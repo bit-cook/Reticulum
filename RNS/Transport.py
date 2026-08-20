@@ -3294,7 +3294,7 @@ class Transport:
                 # except the requestor interface. The discovery
                 # timeout must also cover a full round trip for
                 # an MTU on the slowest online interface.
-                if not Transport.lowest_interface_bitrate: medium_timeout = None
+                if not Transport.lowest_interface_bitrate: medium_timeout = 0
                 else: medium_timeout = 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
                 discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
 
