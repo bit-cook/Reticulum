@@ -184,7 +184,8 @@ class Transport:
     blackholed_identities       = {}           # A table for keeping track of blackholed identities
     
     discovery_path_requests     = {}           # A table for keeping track of path requests on behalf of other nodes
-    discovery_pr_tags           = []           # A table for keeping track of tagged path requests
+    discovery_pr_tags           = set()        # A table for keeping track of tagged path requests
+    discovery_pr_tags_prev      = set()
     max_pr_tags                 = 32000        # Maximum amount of unique path request tags to remember
     max_queued_discovery_prs    = 32           # Maximum amount of queued discovery path requests
     pr_destination_hash         = None         # Destination hash of the local path request destination
@@ -764,7 +765,8 @@ class Transport:
                 # Cull the path request tags list if it has reached its max size
                 if len(Transport.discovery_pr_tags) > Transport.max_pr_tags:
                     with Transport.discovery_pr_tags_lock:
-                        Transport.discovery_pr_tags = Transport.discovery_pr_tags[len(Transport.discovery_pr_tags)-Transport.max_pr_tags:]
+                        Transport.discovery_pr_tags_prev = Transport.discovery_pr_tags
+                        Transport.discovery_pr_tags = set()
 
                 if time.time() > Transport.tables_last_culled + Transport.tables_cull_interval:
                     # Remove unneeded path state entries
@@ -1656,8 +1658,8 @@ class Transport:
 
                     if packet.receiving_interface: packet.receiving_interface.received_path_request()
                     with Transport.discovery_pr_tags_lock:
-                        if not unique_tag in Transport.discovery_pr_tags:
-                            Transport.discovery_pr_tags.append(unique_tag)
+                        if not unique_tag in Transport.discovery_pr_tags and not unique_tag in Transport.discovery_pr_tags_prev:
+                            Transport.discovery_pr_tags.add(unique_tag)
                             tag_valid = True
 
                     if not tag_valid:
