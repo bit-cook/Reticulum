@@ -186,7 +186,7 @@ class Transport:
     discovery_path_requests     = {}           # A table for keeping track of path requests on behalf of other nodes
     discovery_pr_tags           = set()        # A table for keeping track of tagged path requests
     discovery_pr_tags_prev      = set()
-    max_pr_tags                 = 8192         # Maximum amount of unique path request tags to remember
+    max_pr_tags                 = 16000        # Maximum amount of unique path request tags to remember
     max_queued_discovery_prs    = 32           # Maximum amount of queued discovery path requests
     pr_destination_hash         = None         # Destination hash of the local path request destination
 
@@ -1656,6 +1656,7 @@ class Transport:
                 if tag_bytes == None:
                     RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                     return
+
                 else:
                     if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
                     unique_tag = destination_hash+tag_bytes
@@ -1669,23 +1670,40 @@ class Transport:
                         RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                         return
 
-                    # Early registration to immediately hold duplicates
+                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
+                    if interface.should_ingress_limit_pr():
+                        traffic_class = Transport.TC_INGRESS_LIMITED
+
                     path_request_inflight = False
                     with Transport.path_requests_lock:
                         if destination_hash in Transport.path_requests: path_request_inflight = True
 
                     if not path_request_inflight:
+                        # Early registration to immediately batch duplicates
                         with Transport.path_requests_lock: Transport.path_requests[destination_hash] = time.time()
-                    # else:
-                    #     # TODO: Implement
-                    #     return
+                    else:
+                        RNS.log(f"Path request on {packet.receiving_interface} for {RNS.prettyhexrep(destination_hash)} already in-flight, batching to existing", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
+                        if not traffic_class == Transport.TC_INGRESS_LIMITED:
+                            with Transport.discovery_pr_lock:
+                                if destination_hash in Transport.discovery_path_requests:
+                                    if not packet.receiving_interface in Transport.discovery_path_requests[destination_hash]["requesting_interfaces"]:
+                                        Transport.discovery_path_requests[destination_hash]["requesting_interfaces"].append(packet.receiving_interface)
+
+                                else:
+                                    if not Transport.lowest_interface_bitrate: medium_timeout = 0
+                                    else: medium_timeout = 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
+                                    discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
+                                    pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout,
+                                                 "requesting_interfaces": [packet.receiving_interface], "engaged": False }
+
+                                    Transport.discovery_path_requests[destination_hash] = pr_entry
+
+                        return
 
                     # TODO: Add early filtering here for non-transport nodes; there's no
                     # reason to process further if we know we don't have the destination
-                    # locally on this system. Might need adding a local_client_dest_map.
-
-                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
-                    if interface.should_ingress_limit_pr(): traffic_class = Transport.TC_INGRESS_LIMITED
+                    # locally on this system. Might need adding a local_client_dest_map,
+                    # but this will need to be kept *tightly* in-sync.
 
         if not Transport.USE_INBOUND_QUEUE: return Transport._inbound(packet)
         else:
@@ -2217,27 +2235,28 @@ class Transport:
                             # If we have any waiting discovery path requests
                             # for this destination, we retransmit to that
                             # interface immediately
-                            if packet.destination_hash in Transport.discovery_path_requests:
-                                pr_entry = Transport.discovery_path_requests[packet.destination_hash]
-                                attached_interface = pr_entry["requesting_interface"]
+                            with Transport.discovery_pr_lock:
+                                if not packet.destination_hash in Transport.discovery_path_requests: discovery_pr_entry = None
+                                else: discovery_pr_entry = Transport.discovery_path_requests.pop(packet.destination_hash)
 
-                                interface_str = " on "+str(attached_interface)
+                            if discovery_pr_entry:
+                                for attached_interface in discovery_pr_entry["requesting_interfaces"]:
+                                    interface_str = " on "+str(attached_interface)
+                                    RNS.log("Got matching announce, answering waiting discovery path request for "+RNS.prettyhexrep(packet.destination_hash)+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
+                                    announce_identity = RNS.Identity.recall(packet.destination_hash, _no_use=False)
+                                    announce_destination = RNS.Destination(announce_identity, RNS.Destination.OUT, RNS.Destination.SINGLE, "unknown", "unknown");
+                                    announce_destination.hash = packet.destination_hash
+                                    announce_destination.hexhash = announce_destination.hash.hex()
+                                    announce_context = RNS.Packet.NONE
+                                    announce_data = packet.data
 
-                                RNS.log("Got matching announce, answering waiting discovery path request for "+RNS.prettyhexrep(packet.destination_hash)+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
-                                announce_identity = RNS.Identity.recall(packet.destination_hash, _no_use=False)
-                                announce_destination = RNS.Destination(announce_identity, RNS.Destination.OUT, RNS.Destination.SINGLE, "unknown", "unknown");
-                                announce_destination.hash = packet.destination_hash
-                                announce_destination.hexhash = announce_destination.hash.hex()
-                                announce_context = RNS.Packet.NONE
-                                announce_data = packet.data
+                                    new_announce = RNS.Packet(announce_destination, announce_data, RNS.Packet.ANNOUNCE,
+                                                              context = RNS.Packet.PATH_RESPONSE, header_type = RNS.Packet.HEADER_2,
+                                                              transport_type = Transport.TRANSPORT, transport_id = Transport.identity.hash,
+                                                              attached_interface = attached_interface, context_flag = packet.context_flag)
 
-                                new_announce = RNS.Packet(announce_destination, announce_data, RNS.Packet.ANNOUNCE,
-                                                          context = RNS.Packet.PATH_RESPONSE, header_type = RNS.Packet.HEADER_2,
-                                                          transport_type = Transport.TRANSPORT, transport_id = Transport.identity.hash,
-                                                          attached_interface = attached_interface, context_flag = packet.context_flag)
-
-                                new_announce.hops = packet.hops
-                                new_announce.send()
+                                    new_announce.hops = packet.hops
+                                    new_announce.send()
 
                             if not Transport.owner.is_connected_to_shared_instance: Transport.cache(packet, force_cache=True, packet_type="announce")
                             path_table_entry = [now, received_from, announce_hops, expires, random_blobs, packet.receiving_interface, packet.packet_hash]
@@ -3294,7 +3313,15 @@ class Transport:
                     Transport.request_path(destination_hash, interface, tag = request_tag)
 
         elif should_search_for_unknown:
-            if destination_hash in Transport.discovery_path_requests:
+            with Transport.discovery_pr_lock:
+                if destination_hash in Transport.discovery_path_requests:
+                    discovery_path_request_exists  = True
+                    path_request_engaged           = Transport.discovery_path_requests[destination_hash]["engaged"]
+                else:
+                    discovery_path_request_exists  = False
+                    path_request_engaged           = False
+
+            if discovery_path_request_exists and path_request_engaged:
                 RNS.log("There is already a waiting path request for "+RNS.prettyhexrep(destination_hash)+" on behalf of path request"+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
             else:
                 # Abort recursive path request if receiving
@@ -3315,8 +3342,19 @@ class Transport:
                 discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
 
                 RNS.log("Attempting to discover unknown path to "+RNS.prettyhexrep(destination_hash)+" on behalf of path request"+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
-                pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout, "requesting_interface": attached_interface }
-                with Transport.discovery_pr_lock: Transport.discovery_path_requests[destination_hash] = pr_entry
+                pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout,
+                             "requesting_interfaces": None, "engaged": True }
+
+                with Transport.discovery_pr_lock:
+                    existing_requesting_interfaces = []
+                    if destination_hash in Transport.discovery_path_requests:
+                        existing_requesting_interfaces = Transport.discovery_path_requests[destination_hash]["requesting_interfaces"]
+
+                    if not attached_interface in existing_requesting_interfaces:
+                        existing_requesting_interfaces.append(attached_interface)
+                    pr_entry["requesting_interfaces"] = existing_requesting_interfaces
+
+                    Transport.discovery_path_requests[destination_hash] = pr_entry
 
                 for interface in Transport.interfaces:
                     if search_mode_filter and not interface.mode in search_mode_filter: continue
