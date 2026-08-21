@@ -173,6 +173,7 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
         else: return
 
     link_count = None
+    active_link_count = None
     stats = None
 
     details = False
@@ -338,6 +339,8 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
     else:
         if lstats:
             try: link_count = reticulum.get_link_count()
+            except Exception as e: pass
+            try: active_link_count = reticulum.get_active_link_count()
             except Exception as e: pass
 
         try: stats = reticulum.get_interface_stats()
@@ -676,6 +679,8 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                 lstr = f", {link_count} entr{ms} in link table"
             else:
                 lstr = f" {link_count} entr{ms} in link table"
+
+            if active_link_count: lstr = f"{lstr} ({active_link_count} active)"
 
         if traffic_totals:
             rxb_str = "↓"+RNS.prettysize(stats["rxb"])

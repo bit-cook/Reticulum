@@ -3048,6 +3048,14 @@ class Transport:
         else: return 0
 
     @staticmethod
+    def link_count():
+        return len(Transport.link_table)
+
+    @staticmethod
+    def active_link_count():
+        return sum(1 for e in (True for entry in Transport.link_table if entry[IDX_LT_VALIDATED]))
+
+    @staticmethod
     def expire_path(destination_hash):
         with Transport.path_table_lock:
             if destination_hash in Transport.path_table:

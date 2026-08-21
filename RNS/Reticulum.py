@@ -1287,6 +1287,7 @@ class Reticulum:
                     if path == "next_hop":              self.rpc_return(conn, self.get_next_hop(call["destination_hash"]))
                     if path == "first_hop_timeout":     self.rpc_return(conn, self.get_first_hop_timeout(call["destination_hash"]))
                     if path == "link_count":            self.rpc_return(conn, self.get_link_count())
+                    if path == "active_link_count":     self.rpc_return(conn, self.get_active_link_count())
                     if path == "packet_rssi":           self.rpc_return(conn, self.get_packet_rssi(call["packet_hash"]))
                     if path == "packet_snr":            self.rpc_return(conn, self.get_packet_snr(call["packet_hash"]))
                     if path == "packet_q":              self.rpc_return(conn, self.get_packet_q(call["packet_hash"]))
@@ -1738,7 +1739,17 @@ class Reticulum:
             return response
 
         else:
-            return len(RNS.Transport.link_table)
+            return RNS.Transport.link_count()
+
+    def get_active_link_count(self):
+        if self.is_connected_to_shared_instance:
+            rpc_connection = self.get_rpc_client()
+            rpc_connection.send_bytes(mp.packb({"get": "active_link_count"}))
+            response = mp.unpackb(rpc_connection.recv_bytes())
+            return response
+
+        else:
+            return RNS.Transport.active_link_count()
 
     def get_packet_rssi(self, packet_hash):
         if self.is_connected_to_shared_instance:
