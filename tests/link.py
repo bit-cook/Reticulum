@@ -882,7 +882,7 @@ def targets(yp=False):
 
         buffer = RNS.Buffer.create_bidirectional_buffer(0, 0, channel, handle_buffer)
 
-    m_rns = RNS.Reticulum("./tests/rnsconfig", logdest=RNS.LOG_FILE, loglevel=RNS.LOG_EXTREME)
+    m_rns = RNS.Reticulum("./tests/rnsconfig", logdest=RNS.LOG_FILE)
     id1 = RNS.Identity.from_bytes(bytes.fromhex(fixed_keys[0][0]))
     d1 = RNS.Destination(id1, RNS.Destination.IN, RNS.Destination.SINGLE, APP_NAME, "link", "establish")
     d1.set_proof_strategy(RNS.Destination.PROVE_ALL)
