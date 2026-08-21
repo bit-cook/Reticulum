@@ -1753,9 +1753,7 @@ class Transport:
                                         Transport.discovery_path_requests[destination_hash]["requesting_interfaces"].append(packet.receiving_interface)
 
                                 else:
-                                    if not Transport.lowest_interface_bitrate: medium_timeout = 0
-                                    else: medium_timeout = 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
-                                    discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
+                                    discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, Transport.medium_path_timeout())
                                     pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout,
                                                  "requesting_interfaces": [packet.receiving_interface], "engaged": False }
 
@@ -3095,6 +3093,12 @@ class Transport:
         else: return 0
 
     @staticmethod
+    def medium_path_timeout():
+        # A full round trip for an MTU on the slowest online interface
+        if not Transport.lowest_interface_bitrate: return 0
+        return 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
+
+    @staticmethod
     def link_count():
         return len(Transport.link_table)
 
@@ -3431,9 +3435,7 @@ class Transport:
                 # except the requestor interface. The discovery
                 # timeout must also cover a full round trip for
                 # an MTU on the slowest online interface.
-                if not Transport.lowest_interface_bitrate: medium_timeout = 0
-                else: medium_timeout = 2*(RNS.Reticulum.MTU*8/max(Transport.lowest_interface_bitrate, RNS.Reticulum.MINIMUM_BITRATE)) + RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT
-                discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, medium_timeout)
+                discovery_timeout = max(Transport.PATH_REQUEST_TIMEOUT, Transport.medium_path_timeout())
 
                 RNS.log("Attempting to discover unknown path to "+RNS.prettyhexrep(destination_hash)+" on behalf of path request"+interface_str, RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                 pr_entry = { "destination_hash": destination_hash, "timeout": time.time()+discovery_timeout,

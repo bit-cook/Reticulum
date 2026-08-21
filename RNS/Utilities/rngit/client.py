@@ -40,6 +40,7 @@ import subprocess
 
 from RNS._version import __version__
 from RNS.Utilities.rngit import APP_NAME
+from RNS.Utilities.rngit.util import medium_path_timeout
 
 from RNS.vendor.configobj import ConfigObj
 from tempfile import TemporaryDirectory
@@ -223,7 +224,7 @@ class ReticulumGitClient():
 
         RNS.log(f"Requesting path to {RNS.prettyhexrep(destination_hash)}", RNS.LOG_DEBUG)
         sys.stderr.write(f"Requesting path..."); sys.stderr.flush()
-        if not RNS.Transport.await_path(destination_hash, timeout=self.path_timeout):
+        if not RNS.Transport.await_path(destination_hash, timeout=medium_path_timeout(self.path_timeout)):
             sys.stderr.write(f"\n"); sys.stderr.flush()
             self.abort(f"Could not resolve path to {RNS.prettyhexrep(destination_hash)}")
         
@@ -335,10 +336,10 @@ class ReticulumGitClient():
         try: self.connect_server()
         except Exception as e: self.abort(str(e))
 
-        timeout = self.link_timeout
+        timeout = max(self.link_timeout, self.link.establishment_timeout)
         while not self.link_ready and not self.link_failed and timeout > 0:
             time.sleep(0.5)
-            timeout -= 1
+            timeout -= 0.5
 
         if not self.link_ready: self.abort("Failed to establish link")
 

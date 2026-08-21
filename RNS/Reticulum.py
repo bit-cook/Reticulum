@@ -1281,18 +1281,20 @@ class Reticulum:
                         mh = call["max_hops"]
                         self.rpc_return(conn, self.get_path_table(max_hops=mh))
 
-                    if path == "interface_stats":       self.rpc_return(conn, self.get_interface_stats())
-                    if path == "rate_table":            self.rpc_return(conn, self.get_rate_table())
-                    if path == "next_hop_if_name":      self.rpc_return(conn, self.get_next_hop_if_name(call["destination_hash"]))
-                    if path == "next_hop":              self.rpc_return(conn, self.get_next_hop(call["destination_hash"]))
-                    if path == "first_hop_timeout":     self.rpc_return(conn, self.get_first_hop_timeout(call["destination_hash"]))
-                    if path == "link_count":            self.rpc_return(conn, self.get_link_count())
-                    if path == "active_link_count":     self.rpc_return(conn, self.get_active_link_count())
-                    if path == "packet_rssi":           self.rpc_return(conn, self.get_packet_rssi(call["packet_hash"]))
-                    if path == "packet_snr":            self.rpc_return(conn, self.get_packet_snr(call["packet_hash"]))
-                    if path == "packet_q":              self.rpc_return(conn, self.get_packet_q(call["packet_hash"]))
-                    if path == "blackholed_identities": self.rpc_return(conn, self.get_blackholed_identities())
-                    if path == "is_blackholed":         self.rpc_return(conn, self.is_blackholed(call["identity_hash"]))
+                    if path == "interface_stats":          self.rpc_return(conn, self.get_interface_stats())
+                    if path == "rate_table":               self.rpc_return(conn, self.get_rate_table())
+                    if path == "next_hop_if_name":         self.rpc_return(conn, self.get_next_hop_if_name(call["destination_hash"]))
+                    if path == "next_hop":                 self.rpc_return(conn, self.get_next_hop(call["destination_hash"]))
+                    if path == "first_hop_timeout":        self.rpc_return(conn, self.get_first_hop_timeout(call["destination_hash"]))
+                    if path == "lowest_interface_bitrate": self.rpc_return(conn, self.get_lowest_interface_bitrate())
+                    if path == "medium_path_timeout":      self.rpc_return(conn, self.get_medium_path_timeout())
+                    if path == "link_count":               self.rpc_return(conn, self.get_link_count())
+                    if path == "active_link_count":        self.rpc_return(conn, self.get_active_link_count())
+                    if path == "packet_rssi":              self.rpc_return(conn, self.get_packet_rssi(call["packet_hash"]))
+                    if path == "packet_snr":               self.rpc_return(conn, self.get_packet_snr(call["packet_hash"]))
+                    if path == "packet_q":                 self.rpc_return(conn, self.get_packet_q(call["packet_hash"]))
+                    if path == "blackholed_identities":    self.rpc_return(conn, self.get_blackholed_identities())
+                    if path == "is_blackholed":            self.rpc_return(conn, self.is_blackholed(call["identity_hash"]))
 
                 if "drop" in call:
                     path = call["drop"]
@@ -1730,6 +1732,45 @@ class Reticulum:
 
         else:
             return RNS.Transport.first_hop_timeout(destination)
+
+    def get_lowest_interface_bitrate(self):
+        """
+        Returns the bitrate of the slowest currently online
+        interface, or None if no online interface bitrate
+
+        :returns: Lowest online interface bitrate in bits per second, or ``None``.
+        """
+        if self.is_connected_to_shared_instance:
+            try:
+                rpc_connection = self.get_rpc_client()
+                rpc_connection.send_bytes(mp.packb({"get": "lowest_interface_bitrate"}))
+                return mp.unpackb(rpc_connection.recv_bytes())
+            except Exception as e:
+                RNS.log("An error occurred while getting lowest interface bitrate from shared instance: "+str(e), RNS.LOG_ERROR)
+                return None
+
+        else:
+            return RNS.Transport.lowest_interface_bitrate
+
+    def get_medium_path_timeout(self):
+        """
+        Returns an estimate of a reasonable minimum path request timeout covering
+        a full round trip for an MTU on the slowest currently online interface
+        plus per hop grace
+
+        :returns: Timeout in seconds or 0 if it's unknown.
+        """
+        if self.is_connected_to_shared_instance:
+            try:
+                rpc_connection = self.get_rpc_client()
+                rpc_connection.send_bytes(mp.packb({"get": "medium_path_timeout"}))
+                return mp.unpackb(rpc_connection.recv_bytes())
+            except Exception as e:
+                RNS.log("An error occurred while getting medium path timeout from shared instance: "+str(e), RNS.LOG_ERROR)
+                return 0
+
+        else:
+            return RNS.Transport.medium_path_timeout()
 
     def get_next_hop(self, destination):
         if self.is_connected_to_shared_instance:
