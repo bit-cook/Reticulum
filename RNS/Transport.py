@@ -265,8 +265,16 @@ class Transport:
 
     traffic_rxb                 = 0
     traffic_txb                 = 0
+    announce_rxb                = 0
+    announce_txb                = 0
+    pr_rxb                      = 0
+    pr_txb                      = 0
     speed_rx                    = 0
     speed_tx                    = 0
+    announce_speed_rx           = 0
+    announce_speed_tx           = 0
+    pr_speed_rx                 = 0
+    pr_speed_tx                 = 0
     traffic_captured            = None
     lowest_interface_bitrate    = None
     highest_interface_bitrate   = None
@@ -541,9 +549,9 @@ class Transport:
             try: Transport.interfaces.sort(key=lambda interface: interface.bitrate, reverse=True)
             except Exception as e: RNS.log(f"Could not prioritize interfaces according to bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
             try: Transport.lowest_interface_bitrate = min((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
-            except Exception as e: RNS.log(f"Could not get lowest interface bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
+            except Exception as e: RNS.log(f"Could not get lowest interface bitrate. The contained exception was: {e}", RNS.LOG_DEBUG)
             try: Transport.highest_interface_bitrate = max((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
-            except Exception as e: RNS.log(f"Could not get highest interface bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
+            except Exception as e: RNS.log(f"Could not get highest interface bitrate. The contained exception was: {e}", RNS.LOG_DEBUG)
 
     @staticmethod
     def enable_discovery():
@@ -567,31 +575,62 @@ class Transport:
         while True:
             time.sleep(1)
             try:
-                rxb = 0; txb = 0;
-                rxs = 0; txs = 0;
+                rxb  = 0; txb  = 0; rxs  = 0; txs  = 0;
+                arxb = 0; atxb = 0; arxs = 0; atxs = 0;
+                prxb = 0; ptxb = 0; prxs = 0; ptxs = 0;
+
                 for interface in Transport.interfaces:
                     if not hasattr(interface, "parent_interface") or interface.parent_interface == None:
                         if hasattr(interface, "transport_traffic_counter"):
-                            now = time.time(); irxb = interface.rxb; itxb = interface.txb
+                            now = time.time()
+
+                            irxb  = interface.rxb;  itxb  = interface.txb
+                            iarxb = interface.arxb; iatxb = interface.atxb
+                            iprxb = interface.prxb; iptxb = interface.ptxb
+
                             tc = interface.transport_traffic_counter
-                            rx_diff = irxb - tc["rxb"]
-                            tx_diff = itxb - tc["txb"]
                             ts_diff = now  - tc["ts"]
-                            rxb    += rx_diff; crxs = (rx_diff*8)/ts_diff
-                            txb    += tx_diff; ctxs = (tx_diff*8)/ts_diff
-                            interface.current_rx_speed = crxs; rxs += crxs
-                            interface.current_tx_speed = ctxs; txs += ctxs
-                            tc["rxb"] = irxb;
-                            tc["txb"] = itxb;
-                            tc["ts"] = now;
+
+                            rx_diff  = irxb - tc["rxb"];   tx_diff  = itxb - tc["txb"]
+                            arx_diff = iarxb - tc["arxb"]; atx_diff = iatxb - tc["atxb"]
+                            prx_diff = iprxb - tc["prxb"]; ptx_diff = iptxb - tc["ptxb"]
+
+                            rxb    += rx_diff;  crxs  = (rx_diff*8)/ts_diff
+                            txb    += tx_diff;  ctxs  = (tx_diff*8)/ts_diff
+                            arxb   += arx_diff; carxs = (arx_diff*8)/ts_diff
+                            atxb   += atx_diff; catxs = (atx_diff*8)/ts_diff
+                            prxb   += prx_diff; cprxs = (prx_diff*8)/ts_diff
+                            ptxb   += ptx_diff; cptxs = (ptx_diff*8)/ts_diff
+
+                            interface.current_rx_speed  = crxs;  rxs  += crxs
+                            interface.current_tx_speed  = ctxs;  txs  += ctxs
+                            interface.current_arx_speed = carxs; arxs += carxs
+                            interface.current_atx_speed = catxs; atxs += catxs
+                            interface.current_prx_speed = cprxs; prxs += cprxs
+                            interface.current_ptx_speed = cptxs; ptxs += cptxs
+                            
+                            tc["ts"]   = now
+                            tc["rxb"]  = irxb;  tc["txb"]  = itxb
+                            tc["arxb"] = iarxb; tc["atxb"] = iatxb
+                            tc["prxb"] = iprxb; tc["ptxb"] = iptxb
 
                         else:
-                            interface.transport_traffic_counter = {"ts": time.time(), "rxb": interface.rxb, "txb": interface.txb}
+                            interface.transport_traffic_counter = { "ts": time.time(), "rxb": interface.rxb, "txb": interface.txb,
+                                                                    "arxb": interface.arxb, "atxb": interface.atxb,
+                                                                    "prxb": interface.prxb, "ptxb": interface.ptxb }
 
-                Transport.traffic_rxb += rxb
-                Transport.traffic_txb += txb
-                Transport.speed_rx     = rxs
-                Transport.speed_tx     = txs
+                Transport.traffic_rxb       += rxb
+                Transport.traffic_txb       += txb
+                Transport.speed_rx           = rxs
+                Transport.speed_tx           = txs
+                Transport.announce_rxb      += arxb
+                Transport.announce_txb      += atxb
+                Transport.announce_speed_rx  = arxs
+                Transport.announce_speed_tx  = atxs
+                Transport.pr_rxb            += prxb
+                Transport.pr_txb            += ptxb
+                Transport.pr_speed_rx        = prxs
+                Transport.pr_speed_tx        = ptxs
             
             except Exception as e: RNS.log(f"An error occurred while counting interface traffic: {e}", RNS.LOG_ERROR)
 
@@ -1467,8 +1506,8 @@ class Transport:
                             else: raw = Transport.mangle_hops(packet.raw, Transport.local_hops_delta, transport_insert=packet.header_type==RNS.Packet.HEADER_1)
 
                         Transport.transmit(interface, raw)
-                        if packet.packet_type == RNS.Packet.ANNOUNCE: interface.sent_announce()
-                        if packet.destination.type == RNS.Destination.PLAIN and packet.is_outbound_pr: interface.sent_path_request()
+                        if packet.packet_type == RNS.Packet.ANNOUNCE: interface.sent_announce(size=len(raw))
+                        if packet.destination.type == RNS.Destination.PLAIN and packet.is_outbound_pr: interface.sent_path_request(size=len(raw))
                         packet_sent(packet)
                         sent = True
 
@@ -1626,7 +1665,7 @@ class Transport:
             if not tc: traffic_class = Transport.TC_ANNOUNCE
             announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
             if not announce_signature_valid: return
-            elif packet.receiving_interface != None: packet.receiving_interface.received_announce()
+            elif packet.receiving_interface != None: packet.receiving_interface.received_announce(size=len(packet.raw))
             announced_destination_known = packet.destination_hash in Transport.path_table
 
             if not announced_destination_known:
@@ -1670,7 +1709,7 @@ class Transport:
                         RNS.log("Ignoring duplicate path request for "+RNS.prettyhexrep(destination_hash)+" with tag "+RNS.prettyhexrep(unique_tag), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                         return
 
-                    if packet.receiving_interface: packet.receiving_interface.received_path_request()
+                    if packet.receiving_interface: packet.receiving_interface.received_path_request(size=len(raw))
                     if interface.should_ingress_limit_pr():
                         traffic_class = Transport.TC_INGRESS_LIMITED
 

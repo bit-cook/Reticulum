@@ -603,8 +603,16 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
 
                             cspec = "c"
                             if clients == None and "peers" in ifstat and ifstat["peers"]: clients = ifstat["peers"]; cspec = "p"
-                            if clients != None and clients > 0: pc_str = f"{RNS.prettyfrequency(ifstat['outgoing_announce_frequency']/clients, d=1, lpf=True)}/{cspec}"
+                            if clients != None and clients > 0: pc_str = f" {RNS.prettyfrequency(ifstat['outgoing_announce_frequency']/clients, d=1, lpf=True)}/{cspec}"
                             else:                               pc_str = ""
+                            
+                            if "prxs" in ifstat and "rxs" in ifstat and "ptxs" in ifstat and "txs" in ifstat:
+                                arxspct = min(100.0, (ifstat["arxs"] / ifstat["rxs"])*100.0) if ifstat["rxs"] and ifstat["arxs"] else 0.0
+                                atxspct = min(100.0, (ifstat["atxs"] / ifstat["txs"])*100.0) if ifstat["txs"] and ifstat["atxs"] else 0.0
+                                apctstr = f"(↓{int(arxspct)}% / ↑{int(atxspct)}% of flow)"
+                                if pc_str: pc_str = f"{pc_str} {apctstr}"
+                                else: pc_str = f"{apctstr}"
+
                             asr = True
 
                         psr = False
@@ -620,8 +628,16 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                                 ipf = RNS.prettyfrequency(ipn,d=1, lpf=True)+"↓"
                             cspec = "c"
                             if clients == None and "peers" in ifstat and ifstat["peers"]: clients = ifstat["peers"]; cspec = "p"
-                            if clients != None and clients > 0: rpc_str = f"{RNS.prettyfrequency(ifstat['outgoing_pr_frequency']/clients, d=1, lpf=True)}/{cspec}"
+                            if clients != None and clients > 0: rpc_str = f" {RNS.prettyfrequency(ifstat['outgoing_pr_frequency']/clients, d=1, lpf=True)}/{cspec}"
                             else:                               rpc_str = ""
+                            
+                            if "prxs" in ifstat and "rxs" in ifstat and "ptxs" in ifstat and "txs" in ifstat:
+                                prxspct = min(100.0, (ifstat["prxs"] / ifstat["rxs"])*100.0) if ifstat["rxs"] and ifstat["prxs"] else 0.0
+                                ptxspct = min(100.0, (ifstat["ptxs"] / ifstat["txs"])*100.0) if ifstat["txs"] and ifstat["ptxs"] else 0.0
+                                ppctstr = f"(↓{int(prxspct)}% / ↑{int(ptxspct)}% of flow)"
+                                if rpc_str: rpc_str = f"{rpc_str} {ppctstr}"
+                                else: rpc_str = f"{ppctstr}"
+
                             psr = True
 
                         if not asr: iaf = ""; oaf = ""
@@ -638,11 +654,11 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                         txb_str += (mlen-len(txb_str))*" "
 
                         if psr:
-                            print(f"    Path Rqs. : {opf}  {rpc_str}")
+                            print(f"    Path Rqs. : {opf} {rpc_str}")
                             print(f"                {ipf}  {pburst_str}")
 
                         if asr:
-                            print(f"    Announces : {oaf}  {pc_str}")
+                            print(f"    Announces : {oaf} {pc_str}")
                             print(f"                {iaf} {art_str}{burst_str}")
 
                         rxstat = rxb_str
@@ -670,7 +686,49 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
 
             rxstat  = rxb_str+"  "+RNS.prettyspeed(stats["rxs"])
             txstat  = txb_str+"  "+RNS.prettyspeed(stats["txs"])
+
+            if pstats or astats:
+                if "prxs" in stats and "ptxs" in stats and "arxs" in stats and "atxs" in stats:
+                    parxs  = stats["prxs"]+stats["arxs"]
+                    patxs  = stats["ptxs"]+stats["atxs"]
+                    mrxpct = 100.0-min(100.0, (parxs / stats["rxs"])*100.0) if stats["rxs"] else 100.0
+                    mtxpct = 100.0-min(100.0, (patxs / stats["txs"])*100.0) if stats["txs"] else 100.0
+
+                    if stats["rxs"] > 0: rxstat = f"{rxstat}, {int(mrxpct)}% data"
+                    if stats["txs"] > 0: txstat = f"{txstat}, {int(mtxpct)}% data"
+
             print(f"\n Totals       : {txstat}\n                {rxstat}")
+
+            if pstats:
+                if "prxb" in stats and "ptxb" in stats and "prxs" in stats and "ptxs" in stats:
+                    prxb_str = "↓"+RNS.prettysize(stats["prxb"])
+                    ptxb_str = "↑"+RNS.prettysize(stats["ptxb"])
+                    strdiff = len(prxb_str)-len(ptxb_str)
+                    if   strdiff > 0: ptxb_str += " "*strdiff
+                    elif strdiff < 0: prxb_str += " "*-strdiff
+
+                    prxspct = min(100.0, (stats["prxs"] / stats["rxs"])*100.0) if stats["rxs"] and stats["prxs"] else 0.0
+                    ptxspct = min(100.0, (stats["ptxs"] / stats["txs"])*100.0) if stats["txs"] and stats["ptxs"] else 0.0
+
+                    prxstat = prxb_str+"  "+RNS.prettyspeed(stats["prxs"])+f", {int(prxspct)}% of flow"
+                    ptxstat = ptxb_str+"  "+RNS.prettyspeed(stats["ptxs"])+f", {int(ptxspct)}% of flow"
+                    print(f"\n Path Reqs.   : {ptxstat}\n                {prxstat}")
+
+            if astats:
+                if "arxb" in stats and "atxb" in stats and "arxs" in stats and "atxs" in stats:
+                    arxb_str = "↓"+RNS.prettysize(stats["arxb"])
+                    atxb_str = "↑"+RNS.prettysize(stats["atxb"])
+                    strdiff = len(arxb_str)-len(atxb_str)
+                    if   strdiff > 0: atxb_str += " "*strdiff
+                    elif strdiff < 0: arxb_str += " "*-strdiff
+
+                    arxspct = min(100.0, (stats["arxs"] / stats["rxs"])*100.0) if stats["rxs"] and stats["arxs"] else 0.0
+                    atxspct = min(100.0, (stats["atxs"] / stats["txs"])*100.0) if stats["txs"] and stats["atxs"] else 0.0
+
+                    arxstat = arxb_str+"  "+RNS.prettyspeed(stats["arxs"])+f", {int(arxspct)}% of flow"
+                    atxstat = atxb_str+"  "+RNS.prettyspeed(stats["atxs"])+f", {int(atxspct)}% of flow"
+                    print(f"\n Announces    : {atxstat}\n                {arxstat}")
+
 
         if queue_stats:
             tqdp    = f", {stats['rxqtd']} dropped" if stats['rxqtd'] else ""

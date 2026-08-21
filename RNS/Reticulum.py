@@ -1471,6 +1471,26 @@ class Reticulum:
                     else:                                  ifstats["txs"] = 0
                 else:                                      ifstats["txs"] = 0
 
+                if hasattr(interface, "current_arx_speed"):
+                    if interface.current_arx_speed != None: ifstats["arxs"] = interface.current_arx_speed
+                    else:                                   ifstats["arxs"] = 0
+                else:                                       ifstats["arxs"] = 0
+
+                if hasattr(interface, "current_atx_speed"):
+                    if interface.current_atx_speed != None: ifstats["atxs"] = interface.current_atx_speed
+                    else:                                   ifstats["atxs"] = 0
+                else:                                       ifstats["atxs"] = 0
+
+                if hasattr(interface, "current_prx_speed"):
+                    if interface.current_prx_speed != None: ifstats["prxs"] = interface.current_prx_speed
+                    else:                                   ifstats["prxs"] = 0
+                else:                                       ifstats["prxs"] = 0
+
+                if hasattr(interface, "current_ptx_speed"):
+                    if interface.current_ptx_speed != None: ifstats["ptxs"] = interface.current_ptx_speed
+                    else:                                   ifstats["ptxs"] = 0
+                else:                                       ifstats["ptxs"] = 0
+
                 if hasattr(interface, "peers"):
                     if interface.peers != None: ifstats["peers"] = len(interface.peers)
                     else:                       ifstats["peers"] = None
@@ -1503,6 +1523,10 @@ class Reticulum:
                 ifstats["type"]                        = str(type(interface).__name__)
                 ifstats["rxb"]                         = interface.rxb
                 ifstats["txb"]                         = interface.txb
+                ifstats["arxb"]                        = interface.arxb
+                ifstats["atxb"]                        = interface.atxb
+                ifstats["prxb"]                        = interface.prxb
+                ifstats["ptxb"]                        = interface.ptxb
                 ifstats["incoming_announce_frequency"] = interface.incoming_announce_frequency()
                 ifstats["outgoing_announce_frequency"] = interface.outgoing_announce_frequency()
                 ifstats["incoming_pr_frequency"]       = interface.incoming_pr_frequency()
@@ -1537,6 +1561,14 @@ class Reticulum:
             stats["txb"]         = RNS.Transport.traffic_txb
             stats["rxs"]         = RNS.Transport.speed_rx
             stats["txs"]         = RNS.Transport.speed_tx
+            stats["arxb"]        = RNS.Transport.announce_rxb
+            stats["atxb"]        = RNS.Transport.announce_txb
+            stats["arxs"]        = RNS.Transport.announce_speed_rx
+            stats["atxs"]        = RNS.Transport.announce_speed_tx
+            stats["prxb"]        = RNS.Transport.pr_rxb
+            stats["ptxb"]        = RNS.Transport.pr_txb
+            stats["prxs"]        = RNS.Transport.pr_speed_rx
+            stats["ptxs"]        = RNS.Transport.pr_speed_tx
             stats["rxqt"]        = qsnapshot[0]
             stats["rxqd"]        = qsnapshot[1][0]
             stats["rxqa"]        = qsnapshot[1][1]

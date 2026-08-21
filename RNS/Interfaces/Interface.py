@@ -97,6 +97,10 @@ class Interface:
     def __init__(self):
         self.rxb      = 0
         self.txb      = 0
+        self.arxb     = 0
+        self.atxb     = 0
+        self.prxb     = 0
+        self.ptxb     = 0
         self.gravity  = 0
         self.created  = time.time()
         self.detached = False
@@ -258,25 +262,29 @@ class Interface:
             RNS.log("An error occurred while processing held announces for "+str(self), RNS.LOG_ERROR)
             RNS.log("The contained exception was: "+str(e), RNS.LOG_ERROR)
 
-    def received_announce(self, from_spawned=False):
+    def received_announce(self, size=0, from_spawned=False):
+        self.arxb += size
         self.ia_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
-            self.parent_interface.received_announce(from_spawned=True)
+            self.parent_interface.received_announce(size=size, from_spawned=True)
 
-    def sent_announce(self, from_spawned=False):
+    def sent_announce(self, size=0, from_spawned=False):
+        self.atxb += size
         self.oa_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
-            self.parent_interface.sent_announce(from_spawned=True)
+            self.parent_interface.sent_announce(size=size, from_spawned=True)
 
-    def received_path_request(self, from_spawned=False):
+    def received_path_request(self, size=0, from_spawned=False):
+        self.prxb += size
         self.ip_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
-            self.parent_interface.received_path_request(from_spawned=True)
+            self.parent_interface.received_path_request(size=size, from_spawned=True)
 
-    def sent_path_request(self, from_spawned=False):
+    def sent_path_request(self, size=0, from_spawned=False):
+        self.ptxb += size
         self.op_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
-            self.parent_interface.sent_path_request(from_spawned=True)
+            self.parent_interface.sent_path_request(size=size, from_spawned=True)
 
     @property
     def ic_burst_count(self): return None
@@ -351,12 +359,13 @@ class Interface:
                     selected = entries[0]
 
                     now       = time.time()
-                    tx_time   = (len(selected["raw"])*8) / self.bitrate
+                    tx_size   = len(selected["raw"])
+                    tx_time   = (tx_size*8) / self.bitrate
                     wait_time = (tx_time / self.announce_cap)
                     self.announce_allowed_at = now + wait_time
 
                     self.process_outgoing(selected["raw"])
-                    self.sent_announce()
+                    self.sent_announce(tx_size)
 
                     if selected in self.announce_queue:
                         self.announce_queue.remove(selected)
