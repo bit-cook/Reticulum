@@ -1627,8 +1627,8 @@ class Transport:
         return False
 
     @staticmethod
-    def inbound(raw, interface=None, tc=None):
-        try: Transport.preprocess_inbound(raw, interface, tc)
+    def inbound(raw, interface=None, tc=None, ifac_handled=False):
+        try: Transport.preprocess_inbound(raw=raw, interface=interface, tc=tc, ifac_handled=ifac_handled)
         except Exception as e:
             RNS.log(f"Error while processing inbound on {interface}: {e}", RNS.LOG_ERROR)
             RNS.trace_exception(e)
@@ -1646,45 +1646,46 @@ class Transport:
         # If interface access codes are enabled,
         # we must authenticate each packet.
         if len(raw) > 2:
-            if not ifac_handled and interface != None and hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
-                # Check that IFAC flag is set
-                if raw[0] & 0x80 == 0x80:
-                    if len(raw) > 2+interface.ifac_size:
-                        # Extract IFAC
-                        ifac = raw[2:2+interface.ifac_size]
+            if interface != None and hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
+                if not ifac_handled:
+                    # Check that IFAC flag is set
+                    if raw[0] & 0x80 == 0x80:
+                        if len(raw) > 2+interface.ifac_size:
+                            # Extract IFAC
+                            ifac = raw[2:2+interface.ifac_size]
 
-                        # Generate mask
-                        mask = RNS.Cryptography.hkdf(length=len(raw), derive_from=ifac,
-                                                     salt=interface.ifac_key, context=None)
-                        # Unmask payload
-                        i = 0; unmasked_raw = b""
-                        for byte in raw:
-                            # Unmask header bytes and payload
-                            if i <= 1 or i > interface.ifac_size+1: unmasked_raw += bytes([byte ^ mask[i]])
-                            # Don't unmask IFAC itself
-                            else: unmasked_raw += bytes([byte])
-                            i += 1
-                        
-                        raw = unmasked_raw
+                            # Generate mask
+                            mask = RNS.Cryptography.hkdf(length=len(raw), derive_from=ifac,
+                                                         salt=interface.ifac_key, context=None)
+                            # Unmask payload
+                            i = 0; unmasked_raw = b""
+                            for byte in raw:
+                                # Unmask header bytes and payload
+                                if i <= 1 or i > interface.ifac_size+1: unmasked_raw += bytes([byte ^ mask[i]])
+                                # Don't unmask IFAC itself
+                                else: unmasked_raw += bytes([byte])
+                                i += 1
 
-                        # Unset IFAC flag
-                        new_header = bytes([raw[0] & 0x7f, raw[1]])
+                            raw = unmasked_raw
 
-                        # Re-assemble packet
-                        new_raw = new_header+raw[2+interface.ifac_size:]
+                            # Unset IFAC flag
+                            new_header = bytes([raw[0] & 0x7f, raw[1]])
 
-                        # Calculate expected IFAC
-                        expected_ifac = interface.ifac_identity.sign(new_raw)[-interface.ifac_size:]
+                            # Re-assemble packet
+                            new_raw = new_header+raw[2+interface.ifac_size:]
 
-                        # Check it
-                        if ifac == expected_ifac: raw = new_raw
-                        else: return interface.ifac_violation("Invalid IFAC on packet")
+                            # Calculate expected IFAC
+                            expected_ifac = interface.ifac_identity.sign(new_raw)[-interface.ifac_size:]
 
-                    else: return interface.ifac_violation("Insufficient packet size for IFAC packet")
+                            # Check it
+                            if ifac == expected_ifac: raw = new_raw
+                            else: return interface.ifac_violation("Invalid IFAC on packet")
 
-                # If the IFAC flag is not set, but should be,
-                # drop the packet.
-                else: return interface.ifac_violation("Missing IFAC flag on packet for IFAC-enabled interface")
+                        else: return interface.ifac_violation("Insufficient packet size for IFAC packet")
+
+                    # If the IFAC flag is not set, but should be,
+                    # drop the packet.
+                    else: return interface.ifac_violation("Missing IFAC flag on packet for IFAC-enabled interface")
 
             else:
                 # If the interface does not have IFAC enabled,
