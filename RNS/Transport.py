@@ -1567,22 +1567,26 @@ class Transport:
             if packet.packet_type != RNS.Packet.ANNOUNCE:
                 if packet.hops > 1:
                     RNS.log("Dropped PLAIN packet "+RNS.prettyhexrep(packet.packet_hash)+" with "+str(packet.hops)+" hops", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    if packet.receiving_interface: packet.receiving_interface.protocol_violation(f"Transported PLAIN packet with {str(packet.hops)} hops")
                     return False
                 else:
                     return True
             else:
                 RNS.log("Dropped invalid PLAIN announce packet", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                if packet.receiving_interface: packet.receiving_interface.protocol_violation("Announce packet with PLAIN type")
                 return False
 
         if packet.destination_type == RNS.Destination.GROUP:
             if packet.packet_type != RNS.Packet.ANNOUNCE:
                 if packet.hops > 1:
                     RNS.log("Dropped GROUP packet "+RNS.prettyhexrep(packet.packet_hash)+" with "+str(packet.hops)+" hops", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    if packet.receiving_interface: packet.receiving_interface.protocol_violation(f"Transported GROUP packet with {str(packet.hops)} hops")
                     return False
                 else:
                     return True
             else:
                 RNS.log("Dropped invalid GROUP announce packet", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                if packet.receiving_interface: packet.receiving_interface.protocol_violation("Announce packet with GROUP type")
                 return False
 
         if not packet.packet_hash in Transport.packet_hashlist and not packet.packet_hash in Transport.packet_hashlist_prev: return True
@@ -1592,6 +1596,7 @@ class Transport:
                     return True
                 else:
                     RNS.log("Dropped invalid announce packet", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    if packet.receiving_interface: packet.receiving_interface.protocol_violation("Announce packet with invalid destination type")
                     return False
 
         RNS.log("Filtered packet with hash "+RNS.prettyhexrep(packet.packet_hash), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
