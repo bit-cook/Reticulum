@@ -1726,8 +1726,8 @@ class Transport:
                         # Early registration to immediately batch duplicates
                         with Transport.path_requests_lock: Transport.path_requests[destination_hash] = time.time()
                     else:
-                        RNS.log(f"Path request on {packet.receiving_interface} for {RNS.prettyhexrep(destination_hash)} already in-flight, batching to existing", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                         if not traffic_class == Transport.TC_INGRESS_LIMITED:
+                            RNS.log(f"Path request on {packet.receiving_interface} for {RNS.prettyhexrep(destination_hash)} already in-flight, batching to existing", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                             with Transport.discovery_pr_lock:
                                 if destination_hash in Transport.discovery_path_requests:
                                     if not packet.receiving_interface in Transport.discovery_path_requests[destination_hash]["requesting_interfaces"]:
