@@ -273,8 +273,12 @@ class Transport:
     speed_tx                    = 0
     announce_speed_rx           = 0
     announce_speed_tx           = 0
+    announce_freq_rx            = 0
+    announce_freq_tx            = 0
     pr_speed_rx                 = 0
     pr_speed_tx                 = 0
+    pr_freq_rx                  = 0
+    pr_freq_tx                  = 0
     traffic_captured            = None
     lowest_interface_bitrate    = None
     highest_interface_bitrate   = None
@@ -578,6 +582,7 @@ class Transport:
                 rxb  = 0; txb  = 0; rxs  = 0; txs  = 0;
                 arxb = 0; atxb = 0; arxs = 0; atxs = 0;
                 prxb = 0; ptxb = 0; prxs = 0; ptxs = 0;
+                iafreq = 0; oafreq = 0; ipfreq = 0; opfreq = 0
 
                 for interface in Transport.interfaces:
                     if not hasattr(interface, "parent_interface") or interface.parent_interface == None:
@@ -601,6 +606,11 @@ class Transport:
                             atxb   += atx_diff; catxs = (atx_diff*8)/ts_diff
                             prxb   += prx_diff; cprxs = (prx_diff*8)/ts_diff
                             ptxb   += ptx_diff; cptxs = (ptx_diff*8)/ts_diff
+
+                            iafreq += interface.incoming_announce_frequency()
+                            oafreq += interface.outgoing_announce_frequency()
+                            ipfreq += interface.incoming_pr_frequency()
+                            opfreq += interface.outgoing_pr_frequency()
 
                             interface.current_rx_speed  = crxs;  rxs  += crxs
                             interface.current_tx_speed  = ctxs;  txs  += ctxs
@@ -627,10 +637,14 @@ class Transport:
                 Transport.announce_txb      += atxb
                 Transport.announce_speed_rx  = arxs
                 Transport.announce_speed_tx  = atxs
+                Transport.announce_freq_rx   = iafreq
+                Transport.announce_freq_tx   = oafreq
                 Transport.pr_rxb            += prxb
                 Transport.pr_txb            += ptxb
                 Transport.pr_speed_rx        = prxs
                 Transport.pr_speed_tx        = ptxs
+                Transport.pr_freq_rx         = ipfreq
+                Transport.pr_freq_tx         = opfreq
             
             except Exception as e: RNS.log(f"An error occurred while counting interface traffic: {e}", RNS.LOG_ERROR)
 

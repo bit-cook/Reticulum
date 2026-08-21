@@ -733,8 +733,11 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                     prxspct = min(100.0, (stats["prxs"] / stats["rxs"])*100.0) if stats["rxs"] and stats["prxs"] else 0.0
                     ptxspct = min(100.0, (stats["ptxs"] / stats["txs"])*100.0) if stats["txs"] and stats["ptxs"] else 0.0
 
-                    prxstat = prxb_str+"  "+RNS.prettyspeed(stats["prxs"])+f", {int(prxspct)}% of flow"
-                    ptxstat = ptxb_str+"  "+RNS.prettyspeed(stats["ptxs"])+f", {int(ptxspct)}% of flow"
+                    prxfstr = RNS.prettyfrequency(stats["prxf"])
+                    ptxfstr = RNS.prettyfrequency(stats["ptxf"])
+
+                    prxstat = prxb_str+"  "+RNS.prettyspeed(stats["prxs"])+f", {int(prxspct)}% of flow, {prxfstr}"
+                    ptxstat = ptxb_str+"  "+RNS.prettyspeed(stats["ptxs"])+f", {int(ptxspct)}% of flow, {ptxfstr}"
                     print(f"\n Path Rqs.    : {ptxstat}\n                {prxstat}")
 
             if astats:
@@ -748,8 +751,11 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                     arxspct = min(100.0, (stats["arxs"] / stats["rxs"])*100.0) if stats["rxs"] and stats["arxs"] else 0.0
                     atxspct = min(100.0, (stats["atxs"] / stats["txs"])*100.0) if stats["txs"] and stats["atxs"] else 0.0
 
-                    arxstat = arxb_str+"  "+RNS.prettyspeed(stats["arxs"])+f", {int(arxspct)}% of flow"
-                    atxstat = atxb_str+"  "+RNS.prettyspeed(stats["atxs"])+f", {int(atxspct)}% of flow"
+                    arxfstr = RNS.prettyfrequency(stats["arxf"])
+                    atxfstr = RNS.prettyfrequency(stats["atxf"])
+
+                    arxstat = arxb_str+"  "+RNS.prettyspeed(stats["arxs"])+f", {int(arxspct)}% of flow, {arxfstr}"
+                    atxstat = atxb_str+"  "+RNS.prettyspeed(stats["atxs"])+f", {int(atxspct)}% of flow, {atxfstr}"
                     print(f"\n Announces    : {atxstat}\n                {arxstat}")
 
 

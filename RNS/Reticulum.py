@@ -1569,10 +1569,14 @@ class Reticulum:
             stats["atxb"]        = RNS.Transport.announce_txb
             stats["arxs"]        = RNS.Transport.announce_speed_rx
             stats["atxs"]        = RNS.Transport.announce_speed_tx
+            stats["arxf"]        = RNS.Transport.announce_freq_rx
+            stats["atxf"]        = RNS.Transport.announce_freq_tx
             stats["prxb"]        = RNS.Transport.pr_rxb
             stats["ptxb"]        = RNS.Transport.pr_txb
             stats["prxs"]        = RNS.Transport.pr_speed_rx
             stats["ptxs"]        = RNS.Transport.pr_speed_tx
+            stats["prxf"]        = RNS.Transport.pr_freq_rx
+            stats["ptxf"]        = RNS.Transport.pr_freq_tx
             stats["rxqt"]        = qsnapshot[0]
             stats["rxqd"]        = qsnapshot[1][0]
             stats["rxqa"]        = qsnapshot[1][1]
