@@ -146,6 +146,10 @@ class Interface:
         self.ip_freq_deque = deque(maxlen=Interface.IA_FREQ_SAMPLES)
         self.op_freq_deque = deque(maxlen=Interface.OA_FREQ_SAMPLES)
 
+        self.protocol_violations = 0
+        self.ifac_violations     = 0
+        self.packet_filter_hits  = 0
+
     def get_hash(self):
         if not self.__hash: self.__hash = RNS.Identity.full_hash(str(self).encode("utf-8"))
         return self.__hash
@@ -285,6 +289,20 @@ class Interface:
         self.op_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.sent_path_request(size=size, from_spawned=True)
+
+    def protocol_violation(self, description=None):
+        self.protocol_violations += 1
+        RNS.log(f"Protocol violation on {self}: {description}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+        return None
+
+    def ifac_violation(self, description=None):
+        self.ifac_violations += 1
+        RNS.log(f"IFAC violation on {self}: {description}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+        return None
+
+    def packet_filter_hit(self):
+        self.packet_filter_hits += 1
+        return None
 
     @property
     def ic_burst_count(self): return None

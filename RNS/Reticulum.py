@@ -1546,6 +1546,9 @@ class Reticulum:
                 ifstats["mode"]                        = interface.mode
                 ifstats["gravity"]                     = interface.gravity
                 ifstats["announces_to_internal"]       = interface.announces_to_internal
+                ifstats["protocol_violations"]         = interface.protocol_violations
+                ifstats["ifac_violations"]             = interface.ifac_violations
+                ifstats["packet_filter_hits"]          = interface.packet_filter_hits
 
                 interfaces.append(ifstats)
 

@@ -391,10 +391,16 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                 interfaces.sort(key=lambda i: i["outgoing_pr_frequency"], reverse=not sort_reverse)
             if sorting == "held":
                 interfaces.sort(key=lambda i: i["held_announces"], reverse=not sort_reverse)
+            if sorting == "pvs":
+                interfaces.sort(key=lambda i: i["protocol_violations"], reverse=not sort_reverse)
+            if sorting == "ivs":
+                interfaces.sort(key=lambda i: i["ifac_violations"], reverse=not sort_reverse)
+            if sorting == "flt":
+                interfaces.sort(key=lambda i: i["packet_filter_hits"], reverse=not sort_reverse)
             if sorting == "gravity" or sorting == "g":
                 interfaces.sort(key=lambda i: i["gravity"], reverse=not sort_reverse)
 
-          
+
         for ifstat in interfaces:
             name = ifstat["name"]
 
@@ -656,6 +662,16 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                         rxb_str += (mlen-len(rxb_str))*" "
                         txb_str += (mlen-len(txb_str))*" "
 
+                        if "protocol_violations" in ifstat and "ifac_violations" in ifstat:
+                            pv = ifstat["protocol_violations"]; iv = ifstat["ifac_violations"]
+                            if pv or iv:
+                                pvstr = f"{pv} protocol{', ' if iv else ''}"
+                                ivstr = f"{iv} IFAC" if iv else ""
+                                print(f"    Violatns. : {pvstr}{ivstr}")
+
+                        if "packet_filter_hits" in ifstat and ifstat["packet_filter_hits"]:
+                            print(f"    Flt. Hits : {ifstat['packet_filter_hits']}")
+
                         if psr:
                             print(f"    Path Rqs. : {opf} {rpc_str}")
                             print(f"                {ipf}  {pburst_str}")
@@ -719,7 +735,7 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
 
                     prxstat = prxb_str+"  "+RNS.prettyspeed(stats["prxs"])+f", {int(prxspct)}% of flow"
                     ptxstat = ptxb_str+"  "+RNS.prettyspeed(stats["ptxs"])+f", {int(ptxspct)}% of flow"
-                    print(f"\n Path Reqs.   : {ptxstat}\n                {prxstat}")
+                    print(f"\n Path Rqs.    : {ptxstat}\n                {prxstat}")
 
             if astats:
                 if "arxb" in stats and "atxb" in stats and "arxs" in stats and "atxs" in stats:
@@ -793,7 +809,7 @@ def main(must_exit=True, rns_instance=None):
         parser.add_argument("-b", "--blocked-ips", action="store_true", help="show blocked IPs per interface", default=False)
         parser.add_argument("-t", "--totals", action="store_true", help="display traffic totals", default=False)
         parser.add_argument("-q", "--queues", action="store_true", help="display queue stats", default=False)
-        parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, prx, ptx, held]", default=None, type=str)
+        parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, held, prx, ptx, pvs, ivs, flt]", default=None, type=str)
         parser.add_argument("-r", "--reverse", action="store_true", help="reverse sorting", default=False)
         parser.add_argument("-j", "--json", action="store_true", help="output in JSON format", default=False)
         parser.add_argument("-R", action="store", metavar="hash", help="transport identity hash of remote instance to get status from", default=None, type=str)

@@ -1264,6 +1264,7 @@ class Transport:
     def _outbound(packet):
         sent = False
         outbound_time = time.time()
+        if packet.hops > Transport.PATHFINDER_M-1: return False
 
         generate_receipt = False
         if (packet.create_receipt == True and
@@ -1634,27 +1635,28 @@ class Transport:
 
                         # Check it
                         if ifac == expected_ifac: raw = new_raw
-                        else:                     return
+                        else: return interface.ifac_violation("Invalid IFAC on packet")
 
-                    else: return
+                    else: return interface.ifac_violation("Insufficient packet size for IFAC packet")
 
                 # If the IFAC flag is not set, but should be,
                 # drop the packet.
-                else: return
+                else: return interface.ifac_violation("Missing IFAC flag on packet for IFAC-enabled interface")
 
             else:
                 # If the interface does not have IFAC enabled,
                 # check the received packet IFAC flag.
                 # If the flag is set, drop the packet
-                if raw[0] & 0x80 == 0x80: return
+                if raw[0] & 0x80 == 0x80:
+                    return interface.protocol_violation("IFAC flag set on packet for interface without IFAC enabled") if interface else None
 
-        else: return
+        else: return interface.protocol_violation("Insufficient packet size for IFAC processing") if interface else None
 
         if Transport.identity == None: return
 
         packet = RNS.Packet(None, raw)
-        if not packet.unpack(): return
-        if not Transport.packet_filter(packet): return
+        if not packet.unpack(): return interface.protocol_violation("Malformed packet") if interface else None
+        if not Transport.packet_filter(packet): return interface.packet_filter_hit()
         traffic_class = tc or Transport.TC_DATA
 
         packet.receiving_interface = interface
@@ -1664,7 +1666,10 @@ class Transport:
         if packet.packet_type == RNS.Packet.ANNOUNCE:
             if not tc: traffic_class = Transport.TC_ANNOUNCE
             announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
-            if not announce_signature_valid: return
+            if not announce_signature_valid:
+                if not packet.receiving_interface: return None
+                else: return packet.receiving_interface.protocol_violation(f"Invalid announce signature for {RNS.prettyhexrep(packet.destination_hash)}") if not packet.destination_hash in Transport.blackholed_identities else None
+
             elif packet.receiving_interface != None: packet.receiving_interface.received_announce(size=len(packet.raw))
             announced_destination_known = packet.destination_hash in Transport.path_table
 
@@ -1694,7 +1699,7 @@ class Transport:
 
                 if tag_bytes == None:
                     RNS.log("Ignoring tagless path request for "+RNS.prettyhexrep(destination_hash), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
-                    return
+                    return packet.receiving_interface.protocol_violation("Tagless path request") if packet.receiving_interface else None
 
                 else:
                     if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
@@ -1754,10 +1759,17 @@ class Transport:
     @staticmethod
     def inbound_job():
         while Transport._should_run:
-            try: Transport._inbound(Transport.inbound_queues.get())
-            except Exception as e:
-                RNS.log(f"Error while draining inbound queue: {e}", RNS.LOG_ERROR)
-                RNS.trace_exception(e)
+                try: packet = Transport.inbound_queues.get()
+                except Exception as e:
+                    RNS.log(f"Error while draining inbound queue: {e}", RNS.LOG_ERROR)
+                    RNS.trace_exception(e)
+                    continue
+
+                try: Transport._inbound(packet)
+                except Exception as e:
+                    packet.receiving_interface.protocol_violation("Processing caused exception") if packet.receiving_interface else None
+                    RNS.log(f"Error while processing inbound packet: {e}", RNS.LOG_ERROR)
+                    RNS.trace_exception(e)
 
     @staticmethod
     def _inbound(packet):
@@ -1867,7 +1879,8 @@ class Transport:
             # are the designated next hop, and process it
             # accordingly if we are.
             if packet.transport_id != None and packet.packet_type != RNS.Packet.ANNOUNCE:
-                if packet.transport_id == Transport.identity.hash:
+                if not packet.transport_id == Transport.identity.hash: return
+                else:
                     if packet.destination_hash in Transport.path_table:
                         next_hop = Transport.path_table[packet.destination_hash][IDX_PT_NEXT_HOP]
                         remaining_hops = Transport.path_table[packet.destination_hash][IDX_PT_HOPS]
@@ -1971,6 +1984,10 @@ class Transport:
             if packet.packet_type != RNS.Packet.ANNOUNCE and packet.packet_type != RNS.Packet.LINKREQUEST and packet.context != RNS.Packet.LRPROOF:
                 if packet.destination_hash in Transport.link_table:
                     link_entry = Transport.link_table[packet.destination_hash]
+                    if not link_entry[IDX_LT_VALIDATED]:
+                        RNS.log(f"Pre-validation link packet from {packet.receiving_interface}", RNS.LOG_WARNING) # TODO: Remove
+                        return packet.receiving_interface.protocol_violation("Link packet received before link validation") if packet.receiving_interface else None
+
                     # If receiving and outbound interface is
                     # the same for this link, direction doesn't
                     # matter, and we simply repeat the packet.
@@ -2004,9 +2021,12 @@ class Transport:
                         new_raw += packet.raw[2:]
                         Transport.transmit(outbound_interface, new_raw)
                         Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
+
+                    else:
+                        RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_WARNING) # TODO: Remove
                     
                     # TODO: Can we return safely here? Test and possibly enable this at some point.
-                    # return
+                    return
 
 
         # Announce handling. Handles logic related to incoming
@@ -2018,7 +2038,10 @@ class Transport:
                 if packet.destination_hash in Transport.destinations_map:
                     local_destination = Transport.destinations_map[packet.destination_hash]
 
-            if local_destination == None and RNS.Identity.validate_announce(packet):
+            announce_valid = RNS.Identity.validate_announce(packet)
+            if not announce_valid: return packet.receiving_interface.protocol_violation("Invalid announce") if packet.receiving_interface else None
+
+            if local_destination == None and announce_valid:
                 if packet.transport_id != None:
                     received_from = packet.transport_id
                     
@@ -2058,8 +2081,10 @@ class Transport:
                 if local_and_hops_condition:
                     announce_emitted = Transport.announce_emitted(packet)
                     
-                    random_blob = packet.data[RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8:RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8+10]
                     random_blobs = []
+                    random_blob  = packet.data[RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8:RNS.Identity.KEYSIZE//8+RNS.Identity.NAME_HASH_LENGTH//8+10]
+                    if not random_blob: return packet.receiving_interface.protocol_violation("No random blob in data") if packet.receiving_interface else None
+
                     with Transport.inbound_announce_lock:
                         announced_destination_known = packet.destination_hash in Transport.path_table
                         if not announced_destination_known:
@@ -2512,7 +2537,10 @@ class Transport:
                                         if not Transport.owner.is_connected_to_shared_instance:
                                             RNS.Identity._used_destination_data(link_entry[IDX_LT_DSTHASH])
 
-                                    else: RNS.log("Invalid link request proof in transport for link "+RNS.prettyhexrep(packet.destination_hash)+", dropping proof.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                                    else:
+                                        RNS.log("Invalid link request proof in transport for link "+RNS.prettyhexrep(packet.destination_hash)+", dropping proof.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                                        return packet.receiving_interface.protocol_violation("Invalid link request proof in transport") if packet.receiving_interface else None
+
                             except Exception as e: RNS.log("Could not transport link request proof. The contained exception was: "+str(e), RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
                         else: RNS.log("Link request proof received on wrong interface, not transporting it.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
                     else: RNS.log(f"Received link request proof with hop mismatch ({packet.hops}/{link_entry[IDX_LT_REM_HOPS]}:{link_entry[IDX_LT_NH_IF]}->{link_entry[IDX_LT_RCVD_IF]}), not transporting it", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None

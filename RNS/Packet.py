@@ -261,11 +261,14 @@ class Packet:
                 self.destination_hash = self.raw[DST_LEN+2:2*DST_LEN+2]
                 self.context = ord(self.raw[2*DST_LEN+2:2*DST_LEN+3])
                 self.data = self.raw[2*DST_LEN+3:]
+                if len(self.transport_id)     != DST_LEN: raise ValueError("Malformed Transport ID field")
+                if len(self.destination_hash) != DST_LEN: raise ValueError("Malformed destination hash field")
             else:
                 self.transport_id = None
                 self.destination_hash = self.raw[2:DST_LEN+2]
                 self.context = ord(self.raw[DST_LEN+2:DST_LEN+3])
                 self.data = self.raw[DST_LEN+3:]
+                if len(self.destination_hash) != DST_LEN: raise ValueError("Malformed destination hash field")
 
             self.packed = False
             self.update_hash()
