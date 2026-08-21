@@ -696,11 +696,13 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                 if "prxs" in stats and "ptxs" in stats and "arxs" in stats and "atxs" in stats:
                     parxs  = stats["prxs"]+stats["arxs"]
                     patxs  = stats["ptxs"]+stats["atxs"]
-                    mrxpct = 100.0-min(100.0, (parxs / stats["rxs"])*100.0) if stats["rxs"] else 100.0
-                    mtxpct = 100.0-min(100.0, (patxs / stats["txs"])*100.0) if stats["txs"] else 100.0
+                    drxpct = 100.0-min(100.0, (parxs / stats["rxs"])*100.0) if stats["rxs"] else 100.0
+                    dtxpct = 100.0-min(100.0, (patxs / stats["txs"])*100.0) if stats["txs"] else 100.0
+                    drxs = stats["rxs"]*(drxpct/100.0)
+                    dtxs = stats["txs"]*(dtxpct/100.0)
 
-                    if stats["rxs"] > 0: rxstat = f"{rxstat}, {int(mrxpct)}% data"
-                    if stats["txs"] > 0: txstat = f"{txstat}, {int(mtxpct)}% data"
+                    if stats["rxs"] > 0: rxstat = f"{rxstat}, {int(drxpct)}% data ({RNS.prettyspeed(drxs)})"
+                    if stats["txs"] > 0: txstat = f"{txstat}, {int(dtxpct)}% data ({RNS.prettyspeed(dtxs)})"
 
             print(f"\n Totals       : {txstat}\n                {rxstat}")
 
