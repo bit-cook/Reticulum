@@ -180,6 +180,7 @@ class Transport:
     tunnels                     = {}           # A table storing tunnels to other transport instances
     announce_rate_table         = {}           # A table for keeping track of announce rates
     path_requests               = {}           # A table for storing path request timestamps
+    inflight_path_requests      = {}           # A table for tracking in-flight path request
     path_states                 = {}           # A table for keeping track of path states
     blackholed_identities       = {}           # A table for keeping track of blackholed identities
     
@@ -208,6 +209,7 @@ class Transport:
     discovery_pr_lock           = Lock()
     discovery_pr_tags_lock      = Lock()
     path_requests_lock          = Lock()
+    inflight_path_requests_lock = Lock()
     pending_local_prs_lock      = Lock()
     path_states_lock            = Lock()
     jobs_lock                   = Lock()
@@ -958,6 +960,18 @@ class Transport:
                     except Exception as e:
                         RNS.log(f"Could not complete stale path request enumeration in this job round, retrying later: {e}", RNS.LOG_WARNING)
 
+                    # Cull the pending in-flight path requests table
+                    stale_inflight_path_requests = []
+                    try:
+                        inflight_path_requests_snapshot = Transport.inflight_path_requests.copy()
+                        for destination_hash in inflight_path_requests_snapshot:
+                            if time.time() > inflight_path_requests_snapshot[destination_hash] + Transport.PATH_REQUEST_GATE_TIMEOUT:
+                                stale_inflight_path_requests.append(destination_hash)
+                                RNS.log("In-flight path request entry for "+RNS.prettyhexrep(destination_hash)+" timed out and was removed", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+
+                    except Exception as e:
+                        RNS.log(f"Could not complete stale in-flight path request enumeration in this job round, retrying later: {e}", RNS.LOG_WARNING)
+
                     # Cull the pending discovery path requests table
                     stale_discovery_path_requests = []
                     with Transport.discovery_pr_lock:
@@ -1060,6 +1074,16 @@ class Transport:
                     if i > 0:
                         if i == 1: RNS.log("Removed "+str(i)+" path request entry", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                         else: RNS.log("Removed "+str(i)+" path request entries", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+
+                    i = 0
+                    with Transport.inflight_path_requests_lock:
+                        for destination_hash in stale_inflight_path_requests:
+                            Transport.inflight_path_requests.pop(destination_hash)
+                            i += 1
+
+                    if i > 0:
+                        if i == 1: RNS.log("Removed "+str(i)+" in-flight path request entry", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+                        else: RNS.log("Removed "+str(i)+" in-flight path request entries", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
 
                     i = 0
                     with Transport.discovery_pr_lock:
@@ -1738,12 +1762,12 @@ class Transport:
                         traffic_class = Transport.TC_INGRESS_LIMITED
 
                     path_request_inflight = False
-                    with Transport.path_requests_lock:
-                        if destination_hash in Transport.path_requests: path_request_inflight = True
+                    with Transport.inflight_path_requests_lock:
+                        if destination_hash in Transport.inflight_path_requests: path_request_inflight = True
 
                     if not path_request_inflight:
                         # Early registration to immediately batch duplicates
-                        with Transport.path_requests_lock: Transport.path_requests[destination_hash] = time.time()
+                        with Transport.inflight_path_requests_lock: Transport.inflight_path_requests[destination_hash] = time.time()
                     else:
                         if not traffic_class == Transport.TC_INGRESS_LIMITED:
                             RNS.log(f"Path request on {packet.receiving_interface} for {RNS.prettyhexrep(destination_hash)} already in-flight, batching to existing", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
@@ -2359,6 +2383,11 @@ class Transport:
                                         expires = time.time() + Transport.TUNNEL_TIMEOUT
                                         tunnel_entry[IDX_TT_EXPIRES] = expires
                                         RNS.log("Path to "+RNS.prettyhexrep(packet.destination_hash)+" associated with tunnel "+RNS.prettyhexrep(packet.receiving_interface.tunnel_id), RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
+
+                            # Resolve potential in-flight path requests
+                            with Transport.inflight_path_requests_lock:
+                                if packet.destination_hash in Transport.inflight_path_requests:
+                                    Transport.inflight_path_requests.pop(packet.destination_hash)
 
                             # Call externally registered callbacks from apps
                             # wanting to know when an announce arrives
@@ -3305,6 +3334,7 @@ class Transport:
         should_search_for_unknown = False
         should_ingress_limit      = False
         search_mode_filter        = None
+        answered                  = False
 
         if attached_interface != None:
             should_ingress_limit = ingress_limited or attached_interface.should_ingress_limit_pr()
@@ -3335,6 +3365,7 @@ class Transport:
             if destination_hash in Transport.destinations_map: local_destination = Transport.destinations_map[destination_hash]
 
         if local_destination != None:
+            answered = True
             local_destination.announce(path_response=True, tag=tag, attached_interface=attached_interface)
             RNS.log("Answering path request for "+RNS.prettyhexrep(destination_hash)+interface_str+", destination is local to this system", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
 
@@ -3342,6 +3373,7 @@ class Transport:
             packet = Transport.get_cached_packet(Transport.path_table[destination_hash][IDX_PT_PACKET], packet_type="announce")
             next_hop = Transport.path_table[destination_hash][IDX_PT_NEXT_HOP]
             received_from = Transport.path_table[destination_hash][IDX_PT_RVCD_IF]
+            answered = True
 
             if packet == None:
                 RNS.log(f"Could not retrieve announce packet from cache while answering path request for {RNS.prettyhexrep(destination_hash)}, ignoring path request", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
@@ -3472,6 +3504,12 @@ class Transport:
 
         else:
             RNS.log("Ignoring path request for "+RNS.prettyhexrep(destination_hash)+interface_str+", no path known", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
+
+        if answered:
+            # Resolve potential in-flight path requests
+            with Transport.inflight_path_requests_lock:
+                if destination_hash in Transport.inflight_path_requests:
+                    Transport.inflight_path_requests.pop(destination_hash)
 
     @staticmethod
     def from_local_client(packet):
