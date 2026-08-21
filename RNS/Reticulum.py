@@ -1526,8 +1526,12 @@ class Reticulum:
                 ifstats["txb"]                         = interface.txb
                 ifstats["arxb"]                        = interface.arxb
                 ifstats["atxb"]                        = interface.atxb
+                ifstats["arxc"]                        = interface.arxc
+                ifstats["atxc"]                        = interface.atxc
                 ifstats["prxb"]                        = interface.prxb
                 ifstats["ptxb"]                        = interface.ptxb
+                ifstats["prxc"]                        = interface.prxc
+                ifstats["ptxc"]                        = interface.ptxc
                 ifstats["incoming_announce_frequency"] = interface.incoming_announce_frequency()
                 ifstats["outgoing_announce_frequency"] = interface.outgoing_announce_frequency()
                 ifstats["incoming_pr_frequency"]       = interface.incoming_pr_frequency()

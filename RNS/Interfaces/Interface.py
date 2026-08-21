@@ -99,8 +99,12 @@ class Interface:
         self.txb      = 0
         self.arxb     = 0
         self.atxb     = 0
+        self.arxc     = 0
+        self.atxc     = 0
         self.prxb     = 0
         self.ptxb     = 0
+        self.prxc     = 0
+        self.ptxc     = 0
         self.gravity  = 0
         self.created  = time.time()
         self.detached = False
@@ -124,8 +128,10 @@ class Interface:
         
         self.ic_burst_active          = False
         self.ic_burst_activated       = 0
+        self.ic_burst_sustained       = 0
         self.ic_pr_burst_active       = False
         self.ic_pr_burst_activated    = 0
+        self.ic_pr_burst_sustained    = 0
         self.ic_pr_burst_cooldown     = 0
         self.ic_held_release          = 0
         self.ic_max_held_announces    = RNS.Reticulum.get_instance()._default_ic_max_held_announces()
@@ -164,8 +170,10 @@ class Interface:
             ia_freq = self.incoming_announce_frequency()
 
             if self.ic_burst_active:
-                if ia_freq < freq_threshold and time.time() > self.ic_burst_activated+self.ic_burst_hold:
+                if ia_freq < freq_threshold and time.time() > self.ic_burst_activated+self.ic_burst_hold and time.time() > self.ic_burst_sustained+self.ic_burst_hold:
                     if len(self.ia_freq_deque) >= self.IC_DEQUE_MIN_SAMPLE: self.ic_burst_active = False
+                else:
+                    if ia_freq >= freq_threshold: self.ic_burst_sustained = time.time()
 
                 return True
 
@@ -173,6 +181,7 @@ class Interface:
                 if ia_freq > freq_threshold:
                     self.ic_burst_active = True
                     self.ic_burst_activated = time.time()
+                    self.ic_burst_sustained = time.time()
                     self.ic_held_release = time.time() + self.ic_burst_penalty
                     return True
 
@@ -186,10 +195,12 @@ class Interface:
             ip_freq = self.incoming_pr_frequency()
 
             if self.ic_pr_burst_active:
-                if ip_freq < freq_threshold and time.time() > self.ic_pr_burst_activated+self.ic_burst_hold:
+                if ip_freq < freq_threshold and time.time() > self.ic_pr_burst_activated+self.ic_burst_hold and time.time() > self.ic_pr_burst_sustained+self.ic_burst_hold:
                     if self.ic_pr_burst_cooldown <= 0: self.ic_pr_burst_active = False
                     else: self.ic_pr_burst_cooldown -= 1
-                else: self.ic_pr_burst_cooldown = 3
+                else:
+                    self.ic_pr_burst_cooldown = 3
+                    if ip_freq >= freq_threshold: self.ic_pr_burst_sustained = time.time()
 
                 return True
 
@@ -197,6 +208,7 @@ class Interface:
                 if ip_freq > freq_threshold:
                     self.ic_pr_burst_active = True
                     self.ic_pr_burst_activated = time.time()
+                    self.ic_pr_burst_sustained = time.time()
                     self.ic_pr_burst_cooldown = 3
                     return True
 
@@ -267,25 +279,25 @@ class Interface:
             RNS.log("The contained exception was: "+str(e), RNS.LOG_ERROR)
 
     def received_announce(self, size=0, from_spawned=False):
-        self.arxb += size
+        self.arxc += 1; self.arxb += size
         self.ia_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.received_announce(size=size, from_spawned=True)
 
     def sent_announce(self, size=0, from_spawned=False):
-        self.atxb += size
+        self.atxc += 1; self.atxb += size
         self.oa_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.sent_announce(size=size, from_spawned=True)
 
     def received_path_request(self, size=0, from_spawned=False):
-        self.prxb += size
+        self.prxc += 1; self.prxb += size
         self.ip_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.received_path_request(size=size, from_spawned=True)
 
     def sent_path_request(self, size=0, from_spawned=False):
-        self.ptxb += size
+        self.ptxc += 1; self.ptxb += size
         self.op_freq_deque.append(time.time())
         if hasattr(self, "parent_interface") and self.parent_interface != None:
             self.parent_interface.sent_path_request(size=size, from_spawned=True)
