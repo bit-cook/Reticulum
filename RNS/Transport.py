@@ -1665,10 +1665,10 @@ class Transport:
         # Ingress limit announces early
         if packet.packet_type == RNS.Packet.ANNOUNCE:
             if not tc: traffic_class = Transport.TC_ANNOUNCE
-            announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True)
-            if not announce_signature_valid:
-                if not packet.receiving_interface: return None
-                else: return packet.receiving_interface.protocol_violation(f"Invalid announce signature for {RNS.prettyhexrep(packet.destination_hash)}") if not packet.destination_hash in Transport.blackholed_identities else None
+            announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True, signal_blackholed=True)
+            if announce_signature_valid == "blackholed": return None
+            elif not announce_signature_valid:
+                return packet.receiving_interface.protocol_violation(f"Invalid announce signature for {RNS.prettyhexrep(packet.destination_hash)}") if packet.receiving_interface else None
 
             elif packet.receiving_interface != None: packet.receiving_interface.received_announce(size=len(packet.raw))
             announced_destination_known = packet.destination_hash in Transport.path_table
