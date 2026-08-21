@@ -1692,7 +1692,7 @@ class Transport:
                 # check the received packet IFAC flag.
                 # If the flag is set, drop the packet
                 if raw[0] & 0x80 == 0x80:
-                    return interface.protocol_violation("IFAC flag set on packet for interface without IFAC enabled") if interface else None
+                    return interface.ifac_violation("IFAC flag set on packet for interface without IFAC enabled") if interface else None
 
         else: return interface.protocol_violation("Insufficient packet size for IFAC processing") if interface else None
 

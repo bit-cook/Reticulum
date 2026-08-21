@@ -395,7 +395,7 @@ class Interface:
                     wait_time = (tx_time / self.announce_cap)
                     self.announce_allowed_at = now + wait_time
 
-                    self.process_outgoing(selected["raw"])
+                    RNS.Transport.transmit(self, selected["raw"])
                     self.sent_announce(tx_size)
 
                     if selected in self.announce_queue:
