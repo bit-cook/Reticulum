@@ -1634,7 +1634,7 @@ class Transport:
             RNS.trace_exception(e)
 
     @staticmethod
-    def preprocess_inbound(raw, interface=None, tc=None):
+    def preprocess_inbound(raw, interface=None, tc=None, ifac_handled=False):
         if not Transport.ready:
             wait_start = time.time()
             while not Transport.ready:
@@ -1646,7 +1646,7 @@ class Transport:
         # If interface access codes are enabled,
         # we must authenticate each packet.
         if len(raw) > 2:
-            if interface != None and hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
+            if not ifac_handled and interface != None and hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
                 # Check that IFAC flag is set
                 if raw[0] & 0x80 == 0x80:
                     if len(raw) > 2+interface.ifac_size:
@@ -1697,8 +1697,11 @@ class Transport:
 
         if Transport.identity == None: return
 
+        if interface and len(raw) > interface.HW_MTU + (interface.ifac_size or 0):
+            return interface.protocol_violation(f"Frame size exceeded MTU of {interface.HW_MTU} on {interface}")
+
         packet = RNS.Packet(None, raw)
-        if not packet.unpack(): return interface.protocol_violation("Malformed packet") if interface else None
+        if not packet.unpack(): return interface.protocol_violation(f"Malformed packet ({len(raw)} bytes)") if interface else None
         if not Transport.packet_filter(packet): return interface.packet_filter_hit()
         traffic_class = tc or Transport.TC_DATA
 
@@ -1745,7 +1748,10 @@ class Transport:
                     return packet.receiving_interface.protocol_violation("Tagless path request") if packet.receiving_interface else None
 
                 else:
-                    if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8: tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
+                    if len(tag_bytes) > RNS.Identity.TRUNCATED_HASHLENGTH//8:
+                        tag_bytes = tag_bytes[:RNS.Identity.TRUNCATED_HASHLENGTH//8]
+                        if packet.receiving_interface: packet.receiving_interface.protocol_violation("Excessive path request tag size")
+
                     unique_tag = destination_hash+tag_bytes
 
                     with Transport.discovery_pr_tags_lock:
@@ -1986,6 +1992,7 @@ class Transport:
                                             new_raw  = new_raw[:-RNS.Link.LINK_MTU_SIZE]+clamped_mtu
                                         except Exception as e:
                                             RNS.log(f"Dropping link request packet. The contained exception was: {e}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                                            if packet.receiving_interface: packet.receiving_interface.protocol_violation("Undecodable path MTU signalling bytes")
                                             return
 
                             # Entry format is
@@ -2473,6 +2480,7 @@ class Transport:
                                     packet.data  = packet.data[:-RNS.Link.LINK_MTU_SIZE]+clamped_mtu
                                 except Exception as e:
                                     RNS.log(f"Dropping link request packet to local destination. The contained exception was: {e}", RNS.LOG_WARNING)
+                                    if packet.receiving_interface: packet.receiving_interface.protocol_violation("Undecodable path MTU signalling bytes")
                                     return
 
                     packet.destination = destination
@@ -2735,6 +2743,7 @@ class Transport:
         except Exception as e:
             RNS.log("An error occurred while validating tunnel establishment packet.", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
             RNS.log("The contained exception was: "+str(e), RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+            if packet.receiving_interface: packet.receiving_interface.protocol_violation("Invalid tunnel synthesis packet")
 
     @staticmethod
     def void_tunnel_interface(tunnel_id):
@@ -3023,12 +3032,11 @@ class Transport:
                 # cache, replay it to the Transport instance,
                 # so that it can be directed towards it original
                 # destination.
-                Transport.inbound(packet.raw, packet.receiving_interface)
+                Transport.inbound(packet.raw, packet.receiving_interface, ifac_handled=True)
                 return True
-            else:
-                return False
-        else:
-            return False
+
+            else: return False
+        else: return False
 
     @staticmethod
     def cache_request(packet_hash, destination):
@@ -3036,7 +3044,7 @@ class Transport:
         if cached_packet:
             # The packet was found in the local cache,
             # replay it to the Transport instance.
-            Transport.inbound(cached_packet.raw, cached_packet.receiving_interface)
+            Transport.inbound(cached_packet.raw, cached_packet.receiving_interface, ifac_handled=True)
         else:
             # The packet is not in the local cache,
             # query the network.

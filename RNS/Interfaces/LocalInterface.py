@@ -70,6 +70,7 @@ class LocalClientInterface(Interface):
         self.epoll_backend    = False
         self.HW_MTU           = 262144
         self.online           = False
+        self.ifac_size        = self.DEFAULT_IFAC_SIZE
         
         if socket_path != None and RNS.Reticulum.get_instance().use_af_unix: self.socket_path = f"\0rns/{socket_path}"
         else: self.socket_path = None
@@ -382,6 +383,7 @@ class LocalServerInterface(Interface):
         self.epoll_backend = False
         self.online = False
         self.clients = 0
+        self.ifac_size = self.DEFAULT_IFAC_SIZE
         
         if socket_path != None and RNS.Reticulum.get_instance().use_af_unix: self.socket_path = f"\0rns/{socket_path}"
         else: self.socket_path = None
