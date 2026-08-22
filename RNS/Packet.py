@@ -285,6 +285,7 @@ class Packet:
         :returns: A :ref:`RNS.PacketReceipt<api-packetreceipt>` instance if *create_receipt* was set to *True* when the packet was instantiated, if not returns *None*. If the packet could not be sent *False* is returned.
         """
         if not self.sent:
+            if self.hops >= RNS.Transport.PATHFINDER_M: return False
             if not self.packed: self.pack()
             if self.destination.type == RNS.Destination.LINK:
                 if self.destination.status == RNS.Link.CLOSED:
@@ -300,7 +301,7 @@ class Packet:
 
             if RNS.Transport.outbound(self): return self.receipt
             else:
-                RNS.log("No interfaces could process the outbound packet", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                RNS.log(f"No interfaces could process the outbound {self.hops} hop, type {self.packet_type} packet for {self.destination}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
                 self.sent = False
                 self.receipt = None
                 return False
