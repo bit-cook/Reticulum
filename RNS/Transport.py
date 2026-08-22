@@ -281,6 +281,10 @@ class Transport:
     pr_speed_tx                 = 0
     pr_freq_rx                  = 0
     pr_freq_tx                  = 0
+    rx_packets                  = 0
+    tx_packets                  = 0
+    rx_pps                      = 0
+    tx_pps                      = 0
     traffic_captured            = None
     lowest_interface_bitrate    = None
     highest_interface_bitrate   = None
@@ -509,7 +513,7 @@ class Transport:
                 Transport.probe_destination = None
 
             RNS.log("Transport instance "+str(Transport.identity)+" started", RNS.LOG_VERBOSE) if RNS.sl(RNS.LOG_VERBOSE) else None
-            Transport.start_time = time.time()
+        Transport.start_time = time.time()
 
         # Sort interfaces according to bitrate
         Transport.prioritize_interfaces()
@@ -578,6 +582,8 @@ class Transport:
 
     @staticmethod
     def count_traffic_loop():
+        rxp = 0; txp = 0; cts = None
+
         while True:
             time.sleep(1)
             try:
@@ -588,6 +594,7 @@ class Transport:
 
                 for interface in Transport.interfaces:
                     if not hasattr(interface, "parent_interface") or interface.parent_interface == None:
+                        if hasattr(interface, "is_local_shared_instance"): continue
                         if hasattr(interface, "transport_traffic_counter"):
                             now = time.time()
 
@@ -630,7 +637,18 @@ class Transport:
                             interface.transport_traffic_counter = { "ts": time.time(), "rxb": interface.rxb, "txb": interface.txb,
                                                                     "arxb": interface.arxb, "atxb": interface.atxb,
                                                                     "prxb": interface.prxb, "ptxb": interface.ptxb }
+                if not Transport.start_time: rpps = 0; tpps = 0
+                else:
+                    if not cts: ts = Transport.start_time
+                    else:       ts = cts
+                    cts  = time.time(); td = cts - ts
+                    rpps = (Transport.rx_packets - rxp) / td
+                    tpps = (Transport.tx_packets - txp) / td
+                    rxp  = Transport.rx_packets
+                    txp  = Transport.tx_packets
 
+                Transport.rx_pps             = int(round(rpps))
+                Transport.tx_pps             = int(round(tpps))
                 Transport.traffic_rxb       += rxb
                 Transport.traffic_txb       += txb
                 Transport.speed_rx           = rxs
@@ -1276,6 +1294,7 @@ class Transport:
                 interface.process_outgoing(masked_raw)
 
             else: interface.process_outgoing(raw)
+            Transport.tx_packets += 1
 
         except Exception as e: RNS.log("Error while transmitting on "+str(interface)+". The contained exception was: "+str(e), RNS.LOG_ERROR)
 
@@ -1705,6 +1724,7 @@ class Transport:
         if not Transport.packet_filter(packet): return interface.packet_filter_hit()
         traffic_class = tc or Transport.TC_DATA
 
+        Transport.rx_packets += 1
         packet.receiving_interface = interface
         packet.hops += 1
 

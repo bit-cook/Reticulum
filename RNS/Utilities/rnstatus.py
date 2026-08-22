@@ -155,7 +155,7 @@ def get_remote_status(destination_hash, include_lstats, identity, no_output=Fals
 def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=False, astats=False, pstats=False, lstats=False,
                   sorting=None, sort_reverse=False, remote=None, management_identity=None, must_exit=True, rns_instance=None,
                   traffic_totals=False, discovered_interfaces=False, config_entries=False, burst_filter=False, blocked_ips=False,
-                  queue_stats=False, remote_timeout=RNS.Transport.PATH_REQUEST_TIMEOUT):
+                  queue_stats=False, pps=False, remote_timeout=RNS.Transport.PATH_REQUEST_TIMEOUT):
   
     if remote: require_shared = False
     else: require_shared = True
@@ -736,6 +736,12 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                     if stats["rxs"] > 0: rxstat = f"{rxstat}, {int(drxpct)}% data ({RNS.prettyspeed(drxs)})"
                     if stats["txs"] > 0: txstat = f"{txstat}, {int(dtxpct)}% data ({RNS.prettyspeed(dtxs)})"
 
+            if pps:
+                rpps = RNS.prettysize(stats['rxpps'], suffix="pps")
+                tpps = RNS.prettysize(stats['txpps'], suffix="pps")
+                rxstat = f"{rxstat}, {rpps}"
+                txstat = f"{txstat}, {tpps}"
+
             print(f"\n Totals       : {txstat}\n                {rxstat}")
 
             if pstats:
@@ -830,6 +836,7 @@ def main(must_exit=True, rns_instance=None):
         parser.add_argument("-B", "--burst", action="store_true", help="only show interfaces with active bursts", default=False)
         parser.add_argument("-b", "--blocked-ips", action="store_true", help="show blocked IPs per interface", default=False)
         parser.add_argument("-t", "--totals", action="store_true", help="display traffic totals", default=False)
+        parser.add_argument("-p", "--pps", action="store_true", help="display packets per second in totals", default=False)
         parser.add_argument("-q", "--queues", action="store_true", help="display queue stats", default=False)
         parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, arxc, atxc, held, prx, ptx, prxc, ptxc, pvs, ivs, flt]", default=None, type=str)
         parser.add_argument("-r", "--reverse", action="store_true", help="reverse sorting", default=False)
@@ -869,7 +876,7 @@ def main(must_exit=True, rns_instance=None):
                                   astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                                   remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=False, rns_instance=reticulum,
                                   traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
-                                  blocked_ips=args.blocked_ips, queue_stats=args.queues)
+                                  blocked_ips=args.blocked_ips, queue_stats=args.queues, pps=args.pps)
               
                 finally:
                     sys.stdout = old_stdout
@@ -887,7 +894,7 @@ def main(must_exit=True, rns_instance=None):
                           astats=args.announce_stats, pstats=args.pr_stats, lstats=args.link_stats, sorting=args.sort, sort_reverse=args.reverse,
                           remote=args.R, management_identity=args.i, remote_timeout=args.w, must_exit=must_exit, rns_instance=rns_instance,
                           traffic_totals=args.totals, discovered_interfaces=args.discovered, config_entries=args.D, burst_filter=args.burst,
-                          blocked_ips=args.blocked_ips, queue_stats=args.queues)
+                          blocked_ips=args.blocked_ips, queue_stats=args.queues, pps=args.pps)
 
     except KeyboardInterrupt:
         print("")
