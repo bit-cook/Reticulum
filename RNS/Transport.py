@@ -3213,6 +3213,10 @@ class Transport:
         :param destination_hash: A destination hash as *bytes*.
         :param on_interface: If specified, the path request will only be sent on this interface. In normal use, Reticulum handles this automatically, and this parameter should not be used.
         """
+        if on_interface and recursive and on_interface.should_egress_limit_pr():
+            RNS.log(f"Blocking recursive path request on {on_interface} due to active egress limiting", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+            return
+
         if tag == None: request_tag = RNS.Identity.get_random_hash()
         else:           request_tag = tag
 

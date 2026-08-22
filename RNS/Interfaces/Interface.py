@@ -82,7 +82,7 @@ class Interface:
     IC_BURST_PENALTY         = 15
     IC_HELD_RELEASE_INTERVAL = 5
     IC_DEQUE_MIN_SAMPLE      = 2
-    IC_BURST_MIN_SAMPLES     = 6
+    EC_BURST_MIN_SAMPLES     = 2
     EC_PR_FREQ               = 5
     EGRESS_CONTROL           = False
 
@@ -220,10 +220,10 @@ class Interface:
     def should_egress_limit_pr(self):
         if self.egress_control:
             freq_threshold = self.ec_pr_freq
-            op_freq = self.outgoing_pr_frequency()
+            op_freq = self.outgoing_pr_frequency(preemptive=True)
 
             if op_freq > freq_threshold:
-                if len(self.op_freq_deque) >= self.IC_BURST_MIN_SAMPLES: return True
+                if len(self.op_freq_deque) >= self.EC_BURST_MIN_SAMPLES: return True
             
         return False
 
@@ -356,8 +356,8 @@ class Interface:
             hz = n / span
             return hz
 
-    def outgoing_pr_frequency(self):
-        n = len(self.op_freq_deque)
+    def outgoing_pr_frequency(self, preemptive=False):
+        n = len(self.op_freq_deque)+(1 if preemptive else 0)
         if not len(self.op_freq_deque) > 1: return 0
         else:
             oldest = self.op_freq_deque[0]
