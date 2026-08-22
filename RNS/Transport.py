@@ -555,9 +555,9 @@ class Transport:
             try: Transport.interfaces.sort(key=lambda interface: interface.bitrate, reverse=True)
             except Exception as e: RNS.log(f"Could not prioritize interfaces according to bitrate. The contained exception was: {e}", RNS.LOG_ERROR)
             try: Transport.lowest_interface_bitrate = min((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
-            except Exception as e: RNS.log(f"Could not get lowest interface bitrate. The contained exception was: {e}", RNS.LOG_DEBUG)
+            except Exception as e: RNS.log(f"Could not get lowest interface bitrate. The contained exception was: {e}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
             try: Transport.highest_interface_bitrate = max((interface.bitrate for interface in Transport.interfaces if interface.online and interface.bitrate))
-            except Exception as e: RNS.log(f"Could not get highest interface bitrate. The contained exception was: {e}", RNS.LOG_DEBUG)
+            except Exception as e: RNS.log(f"Could not get highest interface bitrate. The contained exception was: {e}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
 
     @staticmethod
     def enable_discovery():
