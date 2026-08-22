@@ -91,6 +91,23 @@ known, returns `DEFAULT_PER_HOP_TIMEOUT`.
 * **Returns:**
   First-hop timeout, in seconds.
 
+#### `get_lowest_interface_bitrate()`
+
+Returns the bitrate of the slowest currently online
+interface, or None if no online interface bitrate
+
+* **Returns:**
+  Lowest online interface bitrate in bits per second, or `None`.
+
+#### `get_medium_path_timeout()`
+
+Returns an estimate of a reasonable minimum path request timeout covering
+a full round trip for an MTU on the slowest currently online interface
+plus per hop grace
+
+* **Returns:**
+  Timeout in seconds or 0 if it’s unknown.
+
 #### `static should_use_implicit_proof()`
 
 Returns whether proofs sent are explicit or implicit.
