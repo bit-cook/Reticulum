@@ -1330,11 +1330,10 @@ class Transport:
 
         # Check if we have a known path for the destination in the path table
         if packet.packet_type != RNS.Packet.ANNOUNCE and packet.destination.type != RNS.Destination.PLAIN and packet.destination.type != RNS.Destination.GROUP and packet.destination_hash in Transport.path_table:
-            with Transport.path_table_lock:
-                if not packet.destination_hash in Transport.path_table:
-                    RNS.log(f"Dropped packet since path table entry disappeared during outbound processing", RNS.LOG_WARNING)
-                    return False
-                else: path_entry = Transport.path_table[packet.destination_hash]
+            path_entry = Transport.path_table.get(packet.destination_hash)
+            if not path_entry:
+                RNS.log(f"Dropped packet since path table entry disappeared during outbound processing", RNS.LOG_WARNING)
+                return False
 
             outbound_interface = path_entry[IDX_PT_RVCD_IF]
 
