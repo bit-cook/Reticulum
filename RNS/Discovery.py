@@ -10,8 +10,16 @@ from threading import Lock
 from .vendor import umsgpack as msgpack
 from collections import deque
 
+# Discoverable interfaces must include a short,
+# unique implementation-specific identifier and
+# version tag in announced discovery information.
+IMPLEMENTATION_NAME = "RNS"
+from RNS._version import __version__ as RNS_VERSION
+
 NAME            = 0xFF
 TRANSPORT_ID    = 0xFE
+TRANSPORT_IMPL  = 0xFD
+TRANSPORT_VERS  = 0xFC
 INTERFACE_TYPE  = 0x00
 TRANSPORT       = 0x01
 REACHABLE_ON    = 0x02
@@ -132,6 +140,8 @@ class InterfaceAnnouncer():
             info  = {INTERFACE_TYPE: interface_type,
                      TRANSPORT:      RNS.Reticulum.transport_enabled(),
                      TRANSPORT_ID:   RNS.Transport.identity.hash,
+                     TRANSPORT_IMPL: IMPLEMENTATION_NAME,
+                     TRANSPORT_VERS: RNS_VERSION,
                      NAME:           self.sanitize(interface.discovery_name),
                      LATITUDE:       interface.discovery_latitude,
                      LONGITUDE:      interface.discovery_longitude,
