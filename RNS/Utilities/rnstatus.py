@@ -501,7 +501,7 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                             print(f"    Mode      : {modestr}")
 
                         if "bitrate" in ifstat and ifstat["bitrate"] != None:
-                            print("    Rate      : {ss}".format(ss=speed_str(ifstat["bitrate"])))
+                            print(f"    Rate      : {speed_str(ifstat['bitrate'])}, MTU {ifstat['mtu']}")
 
                         if "noise_floor" in ifstat:
                             if not "interference" in ifstat: nstr = ""
