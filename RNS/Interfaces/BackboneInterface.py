@@ -50,7 +50,7 @@ class HDLC():
 
 class BackboneInterface(Interface):
     HW_MTU            = 1048576
-    BITRATE_GUESS     = 1_000_000_000
+    BITRATE_GUESS     = 500_000_000
     DEFAULT_IFAC_SIZE = 16
     AUTOCONFIGURE_MTU = True
 

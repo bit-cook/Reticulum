@@ -242,7 +242,7 @@ class Interface:
             elif self.bitrate > 62_500:          self.HW_MTU = 1024
             else:                                self.HW_MTU = None
 
-        RNS.log(f"{self} hardware MTU set to {self.HW_MTU}", RNS.LOG_PATHING)
+        RNS.log(f"{self} hardware MTU set to {self.HW_MTU}", RNS.LOG_DEBUG)
 
     def age(self):
         return time.time()-self.created

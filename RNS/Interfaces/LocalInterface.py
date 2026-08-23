@@ -195,7 +195,7 @@ class LocalClientInterface(Interface):
 
     def send_keepalive(self):
         if self.online:
-            RNS.log(f"Sending keepalive on {self}", RNS.LOG_DEBUG) # TODO: Remove
+            RNS.log(f"Sending keepalive on {self}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
             try:
                 if self.epoll_backend:
                     self.transmit_buffer += bytes([HDLC.FLAG])+bytes([HDLC.FLAG])
@@ -220,7 +220,7 @@ class LocalClientInterface(Interface):
 
     def process_outgoing(self, data):
         if self.pause_on_client_sleep and time.time() > self.pause_timeout:
-            RNS.log(f"TX paused for LocalInterface client, dropping outbound packet", RNS.LOG_DEBUG) # TODO: Remove
+            RNS.log(f"TX paused for LocalInterface client, dropping outbound packet", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None # TODO: Remove
             return
 
         if self.online:
@@ -431,6 +431,7 @@ class LocalServerInterface(Interface):
         self.announce_rate_grace   = None
         self.announce_rate_penalty = None
 
+        self.HW_MTU = 262144
         self.bitrate = 1000*1000*1000
         self.online = True
 
