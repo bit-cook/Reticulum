@@ -1313,7 +1313,7 @@ class Transport:
     def transmit(interface, raw):
         try:
             if hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
-                interface.process_outgoing(Transport.handle_outgoing_ifac_legacy(interface, raw))
+                interface.process_outgoing(Transport.handle_outgoing_ifac(interface, raw))
             else: interface.process_outgoing(raw)
             Transport.tx_packets += 1
 
@@ -1754,7 +1754,7 @@ class Transport:
                     # Check that IFAC flag is set
                     if raw[0] & 0x80 == 0x80:
                         if len(raw) > 2+interface.ifac_size:
-                            ifac_valid, raw = Transport.handle_ifac_legacy(raw, interface)
+                            ifac_valid, raw = Transport.handle_ifac(raw, interface)
                             if not ifac_valid: return
 
                         else: return interface.ifac_violation("Insufficient packet size for IFAC packet")
