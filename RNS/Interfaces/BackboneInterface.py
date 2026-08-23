@@ -564,7 +564,7 @@ class BackboneInterface(Interface):
     @property
     def blocked_ip_list(self):
         if not self.block_fast_flapping: return []
-        else: return list(self.fast_flapping.keys())
+        else: return [ip for ip in self.fast_flapping if self.fast_flapping[ip][2] > self.fast_flap_grace]
 
     @property
     def blocked_ip_count(self):
