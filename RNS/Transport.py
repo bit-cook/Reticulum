@@ -1258,41 +1258,41 @@ class Transport:
         for packet in sorted(outgoing, key=lambda p: p.hops): packet.send()
 
     @staticmethod
+    def handle_outgoing_ifac_legacy(interface, raw):
+        # Calculate packet access code
+        ifac = interface.ifac_identity.sign(raw)[-interface.ifac_size:]
+
+        # Generate mask
+        mask = RNS.Cryptography.hkdf(length=len(raw)+interface.ifac_size, derive_from=ifac,
+                                     salt=interface.ifac_key, context=None)
+        # Set IFAC flag
+        new_header = bytes([raw[0] | 0x80, raw[1]])
+
+        # Assemble new payload with IFAC
+        new_raw    = new_header+ifac+raw[2:]
+
+        # Mask payload
+        i = 0; masked_raw = b""
+        for byte in new_raw:
+            # Mask first header byte, but make sure the
+            # IFAC flag is still set
+            if i == 0: masked_raw += bytes([byte ^ mask[i] | 0x80])
+
+            # Mask second header byte and payload
+            elif i == 1 or i > interface.ifac_size+1: masked_raw += bytes([byte ^ mask[i]])
+
+            # Don't mask the IFAC itself
+            else: masked_raw += bytes([byte])
+
+            i += 1
+
+        return masked_raw
+
+    @staticmethod
     def transmit(interface, raw):
         try:
             if hasattr(interface, "ifac_identity") and interface.ifac_identity != None:
-                # Calculate packet access code
-                ifac = interface.ifac_identity.sign(raw)[-interface.ifac_size:]
-
-                # Generate mask
-                mask = RNS.Cryptography.hkdf(length=len(raw)+interface.ifac_size,
-                                             derive_from=ifac,
-                                             salt=interface.ifac_key,
-                                             context=None)
-                # Set IFAC flag
-                new_header = bytes([raw[0] | 0x80, raw[1]])
-
-                # Assemble new payload with IFAC
-                new_raw    = new_header+ifac+raw[2:]
-                
-                # Mask payload
-                i = 0; masked_raw = b""
-                for byte in new_raw:
-                    # Mask first header byte, but make sure the
-                    # IFAC flag is still set
-                    if i == 0: masked_raw += bytes([byte ^ mask[i] | 0x80])
-                    
-                    # Mask second header byte and payload
-                    elif i == 1 or i > interface.ifac_size+1: masked_raw += bytes([byte ^ mask[i]])
-                    
-                    # Don't mask the IFAC itself
-                    else: masked_raw += bytes([byte])
-                    
-                    i += 1
-
-                # Send it
-                interface.process_outgoing(masked_raw)
-
+                interface.process_outgoing(Transport.handle_outgoing_ifac_legacy(interface, raw))
             else: interface.process_outgoing(raw)
             Transport.tx_packets += 1
 
