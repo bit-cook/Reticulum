@@ -5,6 +5,8 @@ from .hashes import TestSHA512
 from .identity import TestIdentity
 from .link import TestLink
 from .channel import TestChannel
+from .hkdf import TestHKDF
+from .ifac import TestIFAC
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
