@@ -1431,8 +1431,11 @@ class Transport:
         # interface, or belongs to a link.
         else:
             stored_hash = False
-            for interface in Transport.interfaces:
-                if interface.OUT:
+            if packet.attached_interface: potential_interfaces = [packet.attached_interface]
+            else:                         potential_interfaces = Transport.interfaces
+
+            for interface in potential_interfaces:
+                if interface.OUT and interface.online:
                     should_transmit = True
 
                     if packet.destination.type == RNS.Destination.LINK:
