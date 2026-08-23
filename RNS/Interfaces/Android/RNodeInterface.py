@@ -282,12 +282,9 @@ class RNodeInterface(Interface):
         if (port != None or device_serial != None) and (enable_bluetooth or disable_bluetooth or pairing_mode):
             serial = None
             bluetooth_state = None
-            if pairing_mode:
-                bluetooth_state = 0x01
-            elif enable_bluetooth:
-                bluetooth_state = 0x01
-            elif disable_bluetooth:
-                bluetooth_state = 0x00
+            if pairing_mode:        bluetooth_state = 0x01
+            elif enable_bluetooth:  bluetooth_state = 0x01
+            elif disable_bluetooth: bluetooth_state = 0x00
 
             if port != None:
                 RNS.log("Opening serial port "+port+"...")
@@ -518,6 +515,7 @@ class RNodeInterface(Interface):
 
         self.packet_queue    = []
         self.flow_control    = flow_control
+        self.shared_medium   = True
         self.interface_ready = False
         self.announce_rate_target = None
         self.last_port_io = 0

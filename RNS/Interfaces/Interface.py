@@ -126,6 +126,7 @@ class Interface:
         self.tunnel_id                = None
         self.ingress_control          = True
         self.phy_keepalive            = False
+        self.shared_medium            = False
         
         self.ic_burst_active          = False
         self.ic_burst_activated       = 0

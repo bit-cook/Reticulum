@@ -1001,6 +1001,7 @@ class RNodeSubInterface(Interface):
         self.r_premable_time_ms = None
 
         self.packet_queue    = []
+        self.shared_medium   = True
         self.interface_ready = False
         self.parent_interface = parent_interface
         self.announce_rate_target = None
