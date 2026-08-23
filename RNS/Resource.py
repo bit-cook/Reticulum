@@ -1097,7 +1097,7 @@ class Resource:
                         cancel_packet = RNS.Packet(self.link, self.hash, context=RNS.Packet.RESOURCE_ICL)
                         cancel_packet.send()
                     except Exception as e: RNS.log("Could not send resource cancel packet, the contained exception was: "+str(e), RNS.LOG_ERROR)
-                self.link.cancel_outgoing_resource(self)
+                if self in self.link.outgoing_resources: self.link.cancel_outgoing_resource(self)
             else:
                 if self.link.status == RNS.Link.ACTIVE:
                     try:
@@ -1117,7 +1117,7 @@ class Resource:
         if self.status < Resource.COMPLETE:
             if self.initiator:
                 self.status = Resource.REJECTED
-                self.link.cancel_outgoing_resource(self)
+                if self in self.link.outgoing_resources: self.link.cancel_outgoing_resource(self)
                 if self.callback != None:
                     try:
                         self.link.resource_concluded(self)
