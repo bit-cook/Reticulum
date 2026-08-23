@@ -1652,6 +1652,40 @@ class Transport:
             RNS.trace_exception(e)
 
     @staticmethod
+    def handle_ifac_legacy(raw, interface):
+        # Extract IFAC
+        ifac = raw[2:2+interface.ifac_size]
+
+        # Generate mask
+        mask = RNS.Cryptography.hkdf(length=len(raw), derive_from=ifac,
+                                     salt=interface.ifac_key, context=None)
+        # Unmask payload
+        i = 0; unmasked_raw = b""
+        for byte in raw:
+            # Unmask header bytes and payload
+            if i <= 1 or i > interface.ifac_size+1: unmasked_raw += bytes([byte ^ mask[i]])
+            # Don't unmask IFAC itself
+            else: unmasked_raw += bytes([byte])
+            i += 1
+
+        raw = unmasked_raw
+
+        # Unset IFAC flag
+        new_header = bytes([raw[0] & 0x7f, raw[1]])
+
+        # Re-assemble packet
+        new_raw = new_header+raw[2+interface.ifac_size:]
+
+        # Calculate expected IFAC
+        expected_ifac = interface.ifac_identity.sign(new_raw)[-interface.ifac_size:]
+
+        # Check it
+        if ifac == expected_ifac: return True, new_raw
+        else:
+            interface.ifac_violation("Invalid IFAC on packet")
+            return False, None
+
+    @staticmethod
     def preprocess_inbound(raw, interface=None, tc=None, ifac_handled=False):
         if not Transport.ready:
             wait_start = time.time()
@@ -1669,35 +1703,8 @@ class Transport:
                     # Check that IFAC flag is set
                     if raw[0] & 0x80 == 0x80:
                         if len(raw) > 2+interface.ifac_size:
-                            # Extract IFAC
-                            ifac = raw[2:2+interface.ifac_size]
-
-                            # Generate mask
-                            mask = RNS.Cryptography.hkdf(length=len(raw), derive_from=ifac,
-                                                         salt=interface.ifac_key, context=None)
-                            # Unmask payload
-                            i = 0; unmasked_raw = b""
-                            for byte in raw:
-                                # Unmask header bytes and payload
-                                if i <= 1 or i > interface.ifac_size+1: unmasked_raw += bytes([byte ^ mask[i]])
-                                # Don't unmask IFAC itself
-                                else: unmasked_raw += bytes([byte])
-                                i += 1
-
-                            raw = unmasked_raw
-
-                            # Unset IFAC flag
-                            new_header = bytes([raw[0] & 0x7f, raw[1]])
-
-                            # Re-assemble packet
-                            new_raw = new_header+raw[2+interface.ifac_size:]
-
-                            # Calculate expected IFAC
-                            expected_ifac = interface.ifac_identity.sign(new_raw)[-interface.ifac_size:]
-
-                            # Check it
-                            if ifac == expected_ifac: raw = new_raw
-                            else: return interface.ifac_violation("Invalid IFAC on packet")
+                            ifac_valid, raw = Transport.handle_ifac_legacy(raw, interface)
+                            if not ifac_valid: return
 
                         else: return interface.ifac_violation("Insufficient packet size for IFAC packet")
 
