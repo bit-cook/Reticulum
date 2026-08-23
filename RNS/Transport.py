@@ -1258,6 +1258,27 @@ class Transport:
         for packet in sorted(outgoing, key=lambda p: p.hops): packet.send()
 
     @staticmethod
+    def handle_outgoing_ifac(interface, raw):
+        # Calculate packet access code
+        ifac_size = interface.ifac_size
+        ifac = interface.ifac_identity.sign(raw)[-ifac_size:]
+
+        # Generate mask
+        mask = RNS.Cryptography.hkdf(length=len(raw) + ifac_size, derive_from=ifac,
+                                     salt=interface.ifac_key, context=None)
+
+        # Set IFAC flag and assemble new payload with IFAC
+        new_raw = bytes([raw[0] | 0x80, raw[1]]) + ifac + raw[2:]
+
+        # Mask header bytes and payload with a single bignum XOR, leaving
+        # the IFAC itself untouched, then ensure the IFAC flag is set.
+        n = len(new_raw)
+        x = int.from_bytes(new_raw, "big") ^ int.from_bytes(mask, "big")
+        if ifac_size: x ^= int.from_bytes(mask[2:2 + ifac_size], "big") << (8 * (n - 2 - ifac_size))
+        x |= 1 << (8 * n - 1)
+        return x.to_bytes(n, "big")
+
+    @staticmethod
     def handle_outgoing_ifac_legacy(interface, raw):
         # Calculate packet access code
         ifac = interface.ifac_identity.sign(raw)[-interface.ifac_size:]
