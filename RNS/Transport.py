@@ -1652,6 +1652,36 @@ class Transport:
             RNS.trace_exception(e)
 
     @staticmethod
+    def handle_ifac(raw, interface):
+        # Extract IFAC
+        ifac_size = interface.ifac_size
+        ifac = raw[2:2 + ifac_size]
+
+        # Generate mask
+        mask = RNS.Cryptography.hkdf(length=len(raw), derive_from=ifac,
+                                     salt=interface.ifac_key, context=None)
+
+        # Unmask header bytes and payload with a single bignum XOR,
+        # leaving the IFAC tag itself untouched, then drop the IFAC
+        # flag and strip to actual frame payload.
+        n = len(raw)
+        x = int.from_bytes(raw, "big") ^ int.from_bytes(mask, "big")
+        if ifac_size: x ^= int.from_bytes(mask[2:2 + ifac_size], "big") << (8 * (n - 2 - ifac_size))
+        unmasked = x.to_bytes(n, "big")
+
+        # Unset IFAC flag and re-assemble packet
+        new_raw = bytes([unmasked[0] & 0x7f, unmasked[1]]) + unmasked[2 + ifac_size:]
+
+        # Calculate expected IFAC
+        expected_ifac = interface.ifac_identity.sign(new_raw)[-ifac_size:]
+
+        # Check it
+        if ifac == expected_ifac: return True, new_raw
+        else:
+            interface.ifac_violation("Invalid IFAC on packet")
+            return False, None
+
+    @staticmethod
     def handle_ifac_legacy(raw, interface):
         # Extract IFAC
         ifac = raw[2:2+interface.ifac_size]
