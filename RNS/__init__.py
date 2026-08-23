@@ -40,6 +40,7 @@ import bisect
 
 from collections import deque
 from threading import Lock, Condition
+from functools import partial, wraps
 
 from ._version import __version__
 
@@ -416,6 +417,31 @@ class Profiler:
             profiler = Profiler(tag, super_tag, max_captures)
             Profiler.profilers[tag] = profiler
             return profiler
+
+    @staticmethod
+    def profile(func=None, *, tag=None, max_captures=None):
+        """
+        Decorator to profile a function. With no arguments, it can be
+        used as `@RNS.Profiler.profile`, in which case it will use the
+        qualified name of the function as the profiler tag. It can
+        also be used as `@RNS.Profiler.profile(tag="prof_tag")` to use
+        a specific profiler tag.
+
+        :param tag: Either a profiler tag as passed to `Profiler.get_profiler(...)` or a `Profiler` object.
+        :param max_captures: Maximum samples per thread to capture for the specified profiler tag.
+        """
+        if func is None:
+            return partial(Profiler.profile, tag=tag, max_captures=max_captures)
+
+        tag = func.__qualname__ if tag is None else tag
+        if isinstance(tag, Profiler): profiler = tag
+        else:                         profiler = Profiler.get_profiler(tag=tag, max_captures=max_captures)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with profiler:
+                return func(*args, **kwargs)
+        return wrapper
 
     def __init__(self, tag=None, super_tag=None, max_captures=None):
         self.paused = False
