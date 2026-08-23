@@ -1085,7 +1085,7 @@ class Resource:
         if self.next_segment: self.next_segment.cancel()
 
         if self.status == Resource.CORRUPT:
-            self.link.cancel_incoming_resource(self)
+            if self in self.link.incoming_resources: self.link.cancel_incoming_resource(self)
             self.reject(self.advertisement_packet)
             self.link.teardown()
 
@@ -1104,7 +1104,7 @@ class Resource:
                         cancel_packet = RNS.Packet(self.link, self.hash, context=RNS.Packet.RESOURCE_RCL)
                         cancel_packet.send()
                     except Exception as e: RNS.log("Could not send resource cancel packet, the contained exception was: "+str(e), RNS.LOG_ERROR)
-                self.link.cancel_incoming_resource(self)
+                if self in self.link.incoming_resources: self.link.cancel_incoming_resource(self)
             
             if self.callback != None:
                 try:
