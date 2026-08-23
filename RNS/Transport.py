@@ -2534,6 +2534,8 @@ class Transport:
                                 # packet when it finally arrives over another path.
                                 while packet.packet_hash in Transport.packet_hashlist:
                                     Transport.packet_hashlist.remove(packet.packet_hash)
+                                while packet.packet_hash in Transport.packet_hashlist_prev:
+                                    Transport.packet_hashlist_prev.remove(packet.packet_hash)
             else:
                 destination = None
                 with Transport.destinations_map_lock:
