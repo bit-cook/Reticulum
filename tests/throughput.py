@@ -651,6 +651,7 @@ def print_scenario_table(scenario, results):
 
         r = results[mode]
         tp = r['pps']*scenario.frame_size*8
+        if mode == "inline": mode = "direct"
         print(f"{mode:<8} : {RNS.prettyspeed(tp)}")
 
     print()
@@ -661,7 +662,7 @@ def print_pps_matrix(rows):
     if not rows:
         return
     print("-" * 72)
-    print("Transport Core Throughput - PPS matrix (median of runs)")
+    print("Transport Throughput - PPS matrix (median of runs)")
     print(f"  {'scenario':<22}{'direct':>14}{'drainer':>14}")
     print("  " + "-" * 70)
     for name, inline_pps, drainer_pps, fsize in rows:
@@ -881,3 +882,42 @@ if __name__ == "__main__":
 
     unittest.main(argv=[sys.argv[0]] + rest, verbosity=2)
 
+# No Fastpath:
+
+# Transport Core Throughput - PPS matrix (median of runs)
+#   scenario                      direct       drainer
+#   ----------------------------------------------------------------------
+#   transit_single_135           247,667       162,090     267.48 Mbps / 175.06 Mbps
+#   transit_single_475           233,514       159,717     887.35 Mbps / 606.92 Mbps
+#   transit_single_1024          211,443       175,994       1.73 Gbps / 1.44 Gbps
+#   transit_single_16384          78,963        72,532      10.35 Gbps / 9.51 Gbps
+#   transit_single_final         240,855       112,702     260.12 Mbps / 121.72 Mbps
+#   transit_link_135             266,614       220,571     287.94 Mbps / 238.22 Mbps
+#   transit_link_475             256,347       152,410     974.12 Mbps / 579.16 Mbps
+#   transit_link_1024            228,080       194,444       1.87 Gbps / 1.59 Gbps
+#   transit_link_16384            82,149        73,720      10.77 Gbps / 9.66 Gbps
+
+#   terminus_single               29,764        28,308      32.15 Mbps / 30.57 Mbps
+#   announce_ingress               7,394         7,150       9.88 Mbps / 9.55 Mbps
+#   outbound_path                872,747             -     942.57 Mbps / -
+#   ----------------------------------------------------------------------
+
+
+# Fastpath:
+
+# Transport Core Throughput - PPS matrix (median of runs)
+#   scenario                      direct       drainer
+#   ----------------------------------------------------------------------
+#   transit_single_135           407,561       411,426     440.17 Mbps / 444.34 Mbps
+#   transit_single_475           378,867       377,964       1.44 Gbps / 1.44 Gbps
+#   transit_single_1024          320,878       325,910       2.63 Gbps / 2.67 Gbps
+#   transit_single_16384          94,265        94,357      12.36 Gbps / 12.37 Gbps
+#   transit_single_final         395,245       399,247     426.86 Mbps / 431.19 Mbps
+#   transit_link_135             453,216       451,863     489.47 Mbps / 488.01 Mbps
+#   transit_link_475             417,013       417,294       1.58 Gbps / 1.59 Gbps
+#   transit_link_1024            347,548       353,783       2.85 Gbps / 2.90 Gbps
+#   transit_link_16384            96,682        96,871      12.67 Gbps / 12.70 Gbps
+
+#   terminus_single               29,451        25,862      31.81 Mbps / 27.93 Mbps
+#   announce_ingress               7,495         6,996      10.01 Mbps / 9.35 Mbps
+#   outbound_path                840,738             -     908.00 Mbps / -
