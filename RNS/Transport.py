@@ -2159,8 +2159,7 @@ class Transport:
                         Transport.transmit(outbound_interface, new_raw)
                         Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
 
-                    else:
-                        RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_WARNING) # TODO: Remove
+                    else: RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
                     
                     # TODO: Can we return safely here? Test and possibly enable this at some point.
                     return
@@ -2602,11 +2601,7 @@ class Transport:
                         while packet.packet_hash in Transport.packet_hashlist:      Transport.packet_hashlist.remove(packet.packet_hash)
                         while packet.packet_hash in Transport.packet_hashlist_prev: Transport.packet_hashlist_prev.remove(packet.packet_hash)
             else:
-                destination = None
-                with Transport.destinations_map_lock:
-                    if packet.destination_hash in Transport.destinations_map:
-                        destination = Transport.destinations_map[packet.destination_hash]
-
+                destination = Transport.destinations_map.get(packet.destination_hash)
                 if destination and destination.type == packet.destination_type:
                     packet.destination = destination
                     if destination.receive(packet):
