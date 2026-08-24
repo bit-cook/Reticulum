@@ -134,6 +134,7 @@ class Transport:
     PATH_REQUEST_RG             = 1.5          # Extra grace time for roaming-mode interfaces to allow more suitable peers to respond first
     PATH_REQUEST_MI             = 20           # Minimum interval in seconds for automated path requests
 
+    USE_FP_CACHE                = True
     USE_INBOUND_QUEUE           = True
     USE_OUTBOUND_QUEUE          = False
     INBOUND_DA_QUEUE_LENGTH     = 4096
@@ -173,6 +174,7 @@ class Transport:
     # Notes on memory usage: 1 megabyte of memory can store approximately
     # 55.100 path table entries or approximately 22.300 link table entries.
 
+    link_fp_cache               = {}
     announce_table              = {}           # A table for storing announces currently waiting to be retransmitted
     path_table                  = {}           # A lookup table containing the next hop to a given destination
     reverse_table               = {}           # A lookup table for storing packet hashes used to return proofs and replies
@@ -1795,6 +1797,34 @@ class Transport:
         packet.receiving_interface = interface
         packet.hops += 1
 
+        if Transport.USE_FP_CACHE:
+            fp_entry = Transport.link_fp_cache.get(packet.destination_hash, None)
+            if fp_entry:
+                fp_hops = packet.hops
+                if len(Transport.local_client_interfaces) > 0:
+                    if Transport.is_local_client_interface(packet.receiving_interface): fp_hops -= 1
+                elif Transport.interface_to_shared_instance(packet.receiving_interface): fp_hops -= 1
+
+                if   fp_entry[0] and (fp_hops   == fp_entry[1] or  fp_hops == fp_entry[2]): outbound_interface = fp_entry[3]
+                elif packet.receiving_interface == fp_entry[3] and fp_hops == fp_entry[1]:  outbound_interface = fp_entry[4]
+                elif packet.receiving_interface == fp_entry[4] and fp_hops == fp_entry[2]:  outbound_interface = fp_entry[3]
+                else:                                                                       outbound_interface = None
+
+                if outbound_interface:
+                    nhops = fp_hops if not fp_entry[5] or fp_entry[5] != outbound_interface else Transport.local_hops_delta
+                    # RNS.log(f"{packet.receiving_interface} -> {outbound_interface} {nhops}")
+                    Transport.add_packet_hash(packet.packet_hash)
+                    new_raw = packet.raw[0:1]
+                    new_raw += struct.pack("!B", nhops)
+                    new_raw += packet.raw[2:]
+                    Transport.transmit(outbound_interface, new_raw)
+                    Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
+                    # RNS.log(f"FP CACHE HIT", RNS.LOG_CRITICAL)
+                    return
+                # else: RNS.log(f"FP CACHE MISS", RNS.LOG_CRITICAL)
+
+                # RNS.log(f"FP CACHE OUTBOUND MISS {packet.hops} {packet.receiving_interface}\n{fp_entry}")
+
         # Ingress limit announces early
         if packet.packet_type == RNS.Packet.ANNOUNCE:
             if not tc: traffic_class = Transport.TC_ANNOUNCE
@@ -2128,11 +2158,13 @@ class Transport:
                     # the same for this link, direction doesn't
                     # matter, and we simply repeat the packet.
                     outbound_interface = None
+                    same_iface = False
                     if link_entry[IDX_LT_NH_IF] == link_entry[IDX_LT_RCVD_IF]:
                         # But check that taken hops matches one
                         # of the expectede values.
                         if packet.hops == link_entry[IDX_LT_REM_HOPS] or packet.hops == link_entry[IDX_LT_HOPS]:
                             outbound_interface = link_entry[IDX_LT_NH_IF]
+                            same_iface = True
                     else:
                         # If interfaces differ, we transmit on
                         # the opposite interface of what the
@@ -2157,6 +2189,18 @@ class Transport:
                         new_raw += packet.raw[2:]
                         Transport.transmit(outbound_interface, new_raw)
                         Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
+
+                        if Transport.USE_FP_CACHE and not packet.destination_hash in Transport.link_fp_cache:
+                            if from_local_client and not instance_local_link and Transport.local_hops_delta != 0: mangle_to = outbound_interface
+                            elif to_local_client and not instance_local_link and Transport.local_hops_delta != 0: mangle_to = link_entry[IDX_LT_NH_IF] if outbound_interface != link_entry[IDX_LT_NH_IF] else link_entry[IDX_LT_RCVD_IF]
+                            else: mangle_to = None
+
+                            RNS.log(f"MANGLING TO: {mangle_to}")
+
+                            Transport.link_fp_cache[packet.destination_hash] = (same_iface, link_entry[IDX_LT_HOPS], link_entry[IDX_LT_REM_HOPS],
+                                                                                link_entry[IDX_LT_RCVD_IF], link_entry[IDX_LT_NH_IF],
+                                                                                mangle_to)
+                            RNS.log(f"FP-CACHED {RNS.prettyhexrep(packet.destination_hash)}")
 
                     else:
                         RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_WARNING) # TODO: Remove
@@ -2577,30 +2621,29 @@ class Transport:
         # Handling for local data packets
         elif packet.packet_type == RNS.Packet.DATA:
             if packet.destination_type == RNS.Destination.LINK:
-                with Transport.active_links_lock:
-                    link = Transport.active_links_map.get(packet.destination_hash)
-                    if link != None:
-                        if link.attached_interface == packet.receiving_interface:
-                            packet.link = link
-                            if packet.context == RNS.Packet.CACHE_REQUEST:
-                                cached_packet = Transport.get_cached_packet(packet.data)
-                                if cached_packet != None:
-                                    if not cached_packet.unpack(): return
-                                    RNS.Packet(destination=link, data=cached_packet.data,
-                                               packet_type=cached_packet.packet_type, context=cached_packet.context).send()
+                link = Transport.active_links_map.get(packet.destination_hash)
+                if link != None:
+                    if link.attached_interface == packet.receiving_interface:
+                        packet.link = link
+                        if packet.context == RNS.Packet.CACHE_REQUEST:
+                            cached_packet = Transport.get_cached_packet(packet.data)
+                            if cached_packet != None:
+                                if not cached_packet.unpack(): return
+                                RNS.Packet(destination=link, data=cached_packet.data,
+                                           packet_type=cached_packet.packet_type, context=cached_packet.context).send()
 
-                            else: link.receive(packet)
+                        else: link.receive(packet)
 
-                        else:
-                            # In the strange and rare case that an interface
-                            # is partly malfunctioning, and a link-associated
-                            # packet is being received on an interface that
-                            # has failed sending, and transport has failed over
-                            # to another path, we remove this packet hash from
-                            # the filter hashlist so the link can receive the
-                            # packet when it finally arrives over another path.
-                            while packet.packet_hash in Transport.packet_hashlist:      Transport.packet_hashlist.remove(packet.packet_hash)
-                            while packet.packet_hash in Transport.packet_hashlist_prev: Transport.packet_hashlist_prev.remove(packet.packet_hash)
+                    else:
+                        # In the strange and rare case that an interface
+                        # is partly malfunctioning, and a link-associated
+                        # packet is being received on an interface that
+                        # has failed sending, and transport has failed over
+                        # to another path, we remove this packet hash from
+                        # the filter hashlist so the link can receive the
+                        # packet when it finally arrives over another path.
+                        while packet.packet_hash in Transport.packet_hashlist:      Transport.packet_hashlist.remove(packet.packet_hash)
+                        while packet.packet_hash in Transport.packet_hashlist_prev: Transport.packet_hashlist_prev.remove(packet.packet_hash)
             else:
                 destination = None
                 with Transport.destinations_map_lock:
