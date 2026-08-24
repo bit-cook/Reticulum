@@ -608,7 +608,7 @@ def _fmt_pps(value):
 
 
 def print_environment_header():
-    tree_fastpath = "present" if hasattr(RNS.Transport, "_fastpath") else "absent"
+    tree_fastpath = "present" if hasattr(RNS.Transport, "USE_FP_CACHE") else "absent"
     print("=" * 40)
     print("Reticulum Transport Throughput Benchmark")
     print("=" * 40)
@@ -616,7 +616,7 @@ def print_environment_header():
     print(f"  Mode        : {'compiled' if RNS.compiled else 'interpreted'}")
     print(f"  crypto      : {RNS.Cryptography.backend()}")
     print(f"  transport   : enabled")
-    print(f"  fast path   : {tree_fastpath} (informational)")
+    print(f"  fast path   : {tree_fastpath}")
     print(f"  python      : {platform.python_version()}")
     print(f"  platform    : {platform.platform()}")
     print(f"  machine     : {platform.machine()}, cpus: {os.cpu_count()}")
@@ -840,7 +840,7 @@ def _usage():
         "\nUsage: python3 tests/transport_throughput.py [options]\n"
         "\n"
         "Options:\n"
-        "  -s, --scenario NAME   Run only the named scenario (repeatable)\n"
+        "  -s, --scenario NAME   Run only the named scenario\n"
         "  --mode MODE           Measurement mode: inline, drainer or both\n"
         "                        (default: both)\n"
         "  --runs N              Measurement runs per scenario/mode, median\n"
