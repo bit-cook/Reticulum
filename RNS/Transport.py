@@ -2160,10 +2160,8 @@ class Transport:
                         Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
 
                     else: RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
-                    
-                    # TODO: Can we return safely here? Test and possibly enable this at some point.
-                    return
 
+                    return
 
         # Announce handling. Handles logic related to incoming
         # announces, queueing rebroadcasts of these, and removal
