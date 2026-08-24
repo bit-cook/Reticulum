@@ -42,21 +42,6 @@ from ._version import __version__
 from collections import deque
 from functools import partial, wraps
 
-from .Reticulum import Reticulum
-from .Identity import Identity
-from .Link import Link, RequestReceipt
-from .Channel import MessageBase
-from .Buffer import Buffer, RawChannelReader, RawChannelWriter
-from .Transport import Transport
-from .Discovery import InterfaceAnnouncer
-from .Destination import Destination
-from .Packet import Packet
-from .Packet import PacketReceipt
-from .Resolver import Resolver
-from .Resource import Resource, ResourceAdvertisement
-from .Cryptography import HKDF
-from .Cryptography import Hashes
-
 py_modules  = glob.glob(os.path.dirname(__file__)+"/*.py")
 pyc_modules = glob.glob(os.path.dirname(__file__)+"/*.pyc")
 modules     = py_modules+pyc_modules
@@ -673,3 +658,19 @@ def bytes_to_b256(data):
     if not type(data) == bytes: raise TypeError("Invalid input data for base256 encode")
     try: return [byte_to_b256(c) for c in data]
     except Exception as e: raise TypeError(f"Could not encode to base256: {e}")
+
+
+from .Reticulum import Reticulum
+from .Identity import Identity
+from .Link import Link, RequestReceipt
+from .Channel import MessageBase
+from .Buffer import Buffer, RawChannelReader, RawChannelWriter
+from .Transport import Transport
+from .Discovery import InterfaceAnnouncer
+from .Destination import Destination
+from .Packet import Packet
+from .Packet import PacketReceipt
+from .Resolver import Resolver
+from .Resource import Resource, ResourceAdvertisement
+from .Cryptography import HKDF
+from .Cryptography import Hashes
