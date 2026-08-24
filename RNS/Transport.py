@@ -2009,9 +2009,10 @@ class Transport:
             if packet.transport_id != None and packet.packet_type != RNS.Packet.ANNOUNCE:
                 if not packet.transport_id == Transport.identity.hash: return
                 else:
-                    if packet.destination_hash in Transport.path_table:
-                        next_hop = Transport.path_table[packet.destination_hash][IDX_PT_NEXT_HOP]
-                        remaining_hops = Transport.path_table[packet.destination_hash][IDX_PT_HOPS]
+                    path_entry = Transport.path_table.get(packet.destination_hash)
+                    if path_entry != None:
+                        next_hop = path_entry[IDX_PT_NEXT_HOP]
+                        remaining_hops = path_entry[IDX_PT_HOPS]
                         
                         if remaining_hops > 1:
                             # Just increase hop count and transmit
@@ -2044,7 +2045,7 @@ class Transport:
                                 new_raw += struct.pack("!B", packet.hops)
                                 new_raw += packet.raw[2:]
 
-                        outbound_interface = Transport.path_table[packet.destination_hash][IDX_PT_RVCD_IF]
+                        outbound_interface = path_entry[IDX_PT_RVCD_IF]
 
                         if packet.packet_type == RNS.Packet.LINKREQUEST:
                             now = time.time()
@@ -2100,7 +2101,7 @@ class Transport:
 
                         if Transport.local_hops_delta != 0 and from_local_client and not to_local_client: new_raw = Transport.mangle_hops(new_raw, Transport.local_hops_delta)
                         Transport.transmit(outbound_interface, new_raw)
-                        with Transport.path_table_lock: Transport.path_table[packet.destination_hash][IDX_PT_TIMESTAMP] = time.time()
+                        path_entry[IDX_PT_TIMESTAMP] = time.time()
 
                     else:
                         # TODO: There should probably be some kind of REJECT
@@ -2639,10 +2640,8 @@ class Transport:
                                     if peer_identity.validate(signature, signed_data) and not link_entry[IDX_LT_VALIDATED]:
                                         RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link_destination)} from link-request proof ({link_entry[IDX_LT_REM_HOPS]}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
                                         link_entry[IDX_LT_REM_HOPS] = packet.hops
-                                        with Transport.path_table_lock:
-                                            if link_destination in Transport.path_table:
-                                                path_entry = Transport.path_table[link_destination]
-                                                path_entry[IDX_PT_HOPS] = packet.hops
+                                        path_entry = Transport.path_table.get(link_destination)
+                                        if path_entry: path_entry[IDX_PT_HOPS] = packet.hops
 
                                     elif not link_entry[IDX_LT_VALIDATED]: RNS.log(f"Aborting link request proof path re-balancing for {RNS.prettyhexrep(link_destination)} on link {RNS.prettyhexrep(packet.destination_hash)} due to invalid signature", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
                                     else: pass
@@ -2709,15 +2708,14 @@ class Transport:
                                             signature = packet_data[:RNS.Identity.SIGLENGTH//8]
 
                                             if link.destination.identity.validate(signature, signed_data):
-                                                with Transport.path_table_lock:
-                                                    if not link.rebalanced:
-                                                        RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link.destination.hash)} at link terminus ({link.expected_hops}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
-                                                        link.rebalanced = time.time()
-                                                        link.expected_hops = packet.hops
-                                                        if link.destination.hash in Transport.path_table:
-                                                            path_entry = Transport.path_table[link.destination.hash]
-                                                            path_entry[IDX_PT_HOPS] = packet.hops
-                                                            RNS.log(f"Path table re-balanced for {RNS.prettyhexrep(link.destination.hash)}", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                                if not link.rebalanced:
+                                                    RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link.destination.hash)} at link terminus ({link.expected_hops}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                                    link.rebalanced = time.time()
+                                                    link.expected_hops = packet.hops
+                                                    path_entry = Transport.path_table.get(link.destination.hash)
+                                                    if path_entry:
+                                                        path_entry[IDX_PT_HOPS] = packet.hops
+                                                        RNS.log(f"Path table re-balanced for {RNS.prettyhexrep(link.destination.hash)}", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
 
                                             else: RNS.log(f"Aborting path re-balancing at link terminus for {RNS.prettyhexrep(link.destination.hash)} on link {link} due to invalid signature", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
                                     except Exception as e: RNS.log("Error while validating link request proof for path re-balancing at link terminus. The contained exception was: "+str(e), REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
