@@ -1291,7 +1291,7 @@ class Reticulum:
                     if path == "packet_rssi":              self.rpc_return(conn, self.get_packet_rssi(call["packet_hash"]))
                     if path == "packet_snr":               self.rpc_return(conn, self.get_packet_snr(call["packet_hash"]))
                     if path == "packet_q":                 self.rpc_return(conn, self.get_packet_q(call["packet_hash"]))
-                    if path == "profiling_results":     self.rpc_return(conn, self.get_profiling_results())
+                    if path == "profiling_results":        self.rpc_return(conn, self.get_profiling_results())
                     if path == "blackholed_identities":    self.rpc_return(conn, self.get_blackholed_identities())
                     if path == "is_blackholed":            self.rpc_return(conn, self.is_blackholed(call["identity_hash"]))
 
@@ -1327,7 +1327,6 @@ class Reticulum:
 
             except Exception as e:
                 RNS.log("An error ocurred while handling RPC call from local client: "+str(e), RNS.LOG_ERROR)
-                RNS.trace_exception(e)
 
     def get_rpc_client(self): return multiprocessing.connection.Client(self.rpc_addr, family=self.rpc_type, authkey=self.rpc_key)
 
