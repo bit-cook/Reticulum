@@ -40,7 +40,6 @@ import bisect
 
 from ._version import __version__
 from collections import deque
-from threading import Lock, Condition
 from functools import partial, wraps
 
 from .Reticulum import Reticulum
