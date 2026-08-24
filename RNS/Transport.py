@@ -2103,7 +2103,7 @@ class Transport:
                                               outbound_interface,           # 1: Outbound interface
                                               time.time() ]                 # 2: Timestamp
 
-                            with Transport.reverse_table_lock: Transport.reverse_table[packet.getTruncatedHash()] = reverse_entry
+                            with Transport.reverse_table_lock: Transport.reverse_table[packet.truncated_packet_hash] = reverse_entry
 
                         if Transport.local_hops_delta != 0 and from_local_client and not to_local_client: new_raw = Transport.mangle_hops(new_raw, Transport.local_hops_delta)
                         Transport.transmit(outbound_interface, new_raw)

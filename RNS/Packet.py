@@ -350,6 +350,10 @@ class Packet:
 
     def getTruncatedHash(self): return RNS.Identity.truncated_hash(self.get_hashable_part())
 
+    @property
+    def truncated_packet_hash(self):
+        return self.packet_hash[:RNS.Reticulum.TRUNCATED_HASHLENGTH//8]
+
     def get_hashable_part(self):
         hashable_part = bytes([self.raw[0] & 0b00001111])
         if self.header_type == Packet.HEADER_2: hashable_part += self.raw[(RNS.Identity.TRUNCATED_HASHLENGTH//8)+2:]
@@ -380,7 +384,7 @@ class Packet:
 
 class ProofDestination:
     def __init__(self, packet):
-        self.hash = packet.get_hash()[:RNS.Reticulum.TRUNCATED_HASHLENGTH//8];
+        self.hash = packet.truncated_packet_hash;
         self.type = RNS.Destination.SINGLE
 
     def encrypt(self, plaintext): return plaintext
@@ -405,8 +409,8 @@ class PacketReceipt:
 
     # Creates a new packet receipt from a sent packet
     def __init__(self, packet):
-        self.hash           = packet.get_hash()
-        self.truncated_hash = packet.getTruncatedHash()
+        self.hash           = packet.packet_hash
+        self.truncated_hash = packet.truncated_packet_hash
         self.sent           = True
         self.sent_at        = time.time()
         self.proved         = False
