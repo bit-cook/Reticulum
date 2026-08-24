@@ -406,7 +406,7 @@ class Profiler:
     profilers = {}
     tags = {}
 
-    # Samples per tag per thread
+    # Samples per tag
     MAX_CAPTURES = 10000
 
     @staticmethod
@@ -428,7 +428,7 @@ class Profiler:
         a specific profiler tag.
 
         :param tag: Either a profiler tag as passed to `Profiler.get_profiler(...)` or a `Profiler` object.
-        :param max_captures: Maximum samples per thread to capture for the specified profiler tag.
+        :param max_captures: Maximum samples to capture for the specified profiler tag.
         """
         if func is None:
             return partial(Profiler.profile, tag=tag, max_captures=max_captures)
@@ -467,11 +467,18 @@ class Profiler:
         tag = self.tag
         super_tag = self.super_tag
         thread_ident = threading.get_ident()
-        if not tag in Profiler.tags: Profiler.tags[tag] = {"threads": {}, "super": super_tag}
+        if not tag in Profiler.tags: Profiler.tags[tag] = {"threads": {}, "super": super_tag, "captures": deque(maxlen=self.max_captures)}
         if not thread_ident in Profiler.tags[tag]["threads"]:
-            Profiler.tags[tag]["threads"][thread_ident] = {"current_start": None, "captures": deque(maxlen=self.max_captures)}
+            Profiler.tags[tag]["threads"][thread_ident] = {"running": deque()}
 
-        Profiler.tags[tag]["threads"][thread_ident]["current_start"] = time.perf_counter()
+        # The tag deque stores a shared reference to the capture, and the end
+        # time isn't updated until the context manager exits. This leaves the
+        # deque sorted by start time, except for cases where the thread is
+        # preemted between getting the current time and appending. We also store
+        # a stack of start times per thread to support reentrancy.
+        capture = {"start": time.perf_counter(), "end": None, "thread_ident": thread_ident}
+        Profiler.tags[tag]["captures"].append(capture)
+        Profiler.tags[tag]["threads"][thread_ident]["running"].append(capture)
         self.resume_super()
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -481,14 +488,15 @@ class Profiler:
         end = time.perf_counter() - self.pause_time
         self.pause_time = 0
         thread_ident = threading.get_ident()
-        if tag in Profiler.tags and thread_ident in Profiler.tags[tag]["threads"]:
-            if Profiler.tags[tag]["threads"][thread_ident]["current_start"] != None:
-                begin = Profiler.tags[tag]["threads"][thread_ident]["current_start"]
-                Profiler.tags[tag]["threads"][thread_ident]["current_start"] = None
-                Profiler.tags[tag]["threads"][thread_ident]["captures"].append((begin, end-begin))
+        try:
+            if tag in Profiler.tags and thread_ident in Profiler.tags[tag]["threads"]:
+                try: capture = Profiler.tags[tag]["threads"][thread_ident]["running"].pop()
+                except IndexError as e: return
+                capture["end"] = end
                 if not Profiler._ran:
                     Profiler._ran = True
-        self.resume_super()
+        finally:
+            self.resume_super()
 
     def pause(self, pause_started=None):
         if not self.paused:
@@ -507,69 +515,82 @@ class Profiler:
 
     @staticmethod
     def results():
-        results = {}
-
         def find_window_start(captures, start_time, hi=None):
             hi = len(captures) if hi is None else hi
-            idx = bisect.bisect_left(captures, start_time, hi=hi, key=lambda c: c[0])
+            idx = bisect.bisect_left(captures, start_time, hi=hi, key=lambda c: c["start"])
             return idx if len(captures) - idx > 1 else None
 
         # Fast one-pass calculation of summary statistics
-        def calc_stats(captures, start=0, end=None, key=lambda c: c):
+        def calc_stats(captures, start=0, end=None, key=lambda c: c, threads_key=None):
             if end is None: end = len(captures)
+            while start > 0 and start <  len(captures) and start < end and key(captures[start]) is None: start += 1
+            while   end > 0 and   end <= len(captures) and start < end and key(captures[end-1]) is None:   end -= 1
             count = end - start
 
             if count <= 0: return None
             elif count == 1:
-                return { "mean":   key(captures[start]),
-                         "median": key(captures[start]),
-                         "min":    key(captures[start]),
-                         "max":    key(captures[start]),
-                         "stdev":  None }
+                capture = key(captures[start])
+                return { "count":   1,
+                         "mean":    capture,
+                         "median":  capture,
+                         "min":     capture,
+                         "max":     capture,
+                         "stdev":   None,
+                         "sum":     capture,
+                         "threads": 1 if threads_key else None}
 
+            # Median is approximate if there are any incomplete captures in the
+            # middle of the range.
             med_even = count % 2 == 0
             med_idx  = start + (count // 2 if med_even else (count - 1) // 2)
-            if med_even: c_median = key(captures[med_idx])
-            else:        c_median = (key(captures[med_idx]) + key(captures[med_idx+1])) / 2
+            while key(captures[med_idx]) is None and med_idx < end: med_idx += 1
+            if med_idx == end: c_median = None
+            elif med_even:     c_median = key(captures[med_idx])
+            else:
+                med_idx2 = med_idx + 1
+                while key(captures[med_idx2]) is None and med_idx2 < end: med_idx2 += 1
+                if med_idx2 == end: c_median = None
+                else:
+                    med_cap1 = key(captures[med_idx])
+                    med_cap2 = key(captures[med_idx+1])
+                    if med_cap1 is None or med_cap2 is None: c_median = None
+                    else:                                    c_median = (med_cap1 + med_cap2) / 2
 
-            c_mean = 0; c_min = key(captures[start]); c_max = key(captures[start]); ck = 0; ck2 = 0
+            c_count = 0; c_sum = 0; c_min = key(captures[start]); c_max = key(captures[start]); ck = 0; ck2 = 0
+            uniq_threads = set()
             for idx in range(start, end):
                 c = key(captures[idx])
-                c_mean += c
+                if c is None: continue
+                else:         c_count += 1
+                c_sum += c
                 if c < c_min: c_min = c
                 if c > c_max: c_max = c
                 ck  += c - c_median
                 ck2 += (c - c_median) ** 2
-            c_mean /= count
-            c_std = math.sqrt((ck2 - (ck ** 2)/count) / (count - 1))
+                if threads_key: uniq_threads.add(threads_key(captures[idx]))
+            c_mean = c_sum / c_count if c_count > 0 else None
+            c_std = math.sqrt((ck2 - (ck ** 2)/c_count) / (c_count - 1)) if c_count > 1 else None
 
-            return { "mean": c_mean, "median": c_median, "min": c_min, "max": c_max, "stdev": c_std }
+            return { "count":   c_count,
+                     "mean":    c_mean,
+                     "median":  c_median,
+                     "min":     c_min,
+                     "max":     c_max,
+                     "stdev":   c_std,
+                     "sum":     c_sum,
+                     "threads": len(uniq_threads) if threads_key else None }
 
+        def stats_key(capture):
+            end = capture["end"]
+            if end is None: return None
+            else:           return end - capture["start"]
+
+        results = {}
         now = time.perf_counter()
         for tag in sorted(Profiler.tags):
-            tag_captures = []
             tag_entry = Profiler.tags[tag]
+            tag_captures = sorted(tag_entry["captures"], key=lambda c: c["start"])
 
-            for thread_ident in tag_entry["threads"]:
-                thread_entry = tag_entry["threads"][thread_ident]
-                thread_captures = thread_entry["captures"]
-
-                #sample_count = len(thread_captures)
-                #if sample_count > 1:
-                #    thread_results = { "count": sample_count,
-                #                       "mean":   mean(thread_captures),
-                #                       "median": median(thread_captures),
-                #                       "stdev":  stdev(thread_captures) }
-                #elif sample_count == 1:
-                #    thread_results = { "count": sample_count,
-                #                       "mean": mean(thread_captures),
-                #                       "median": median(thread_captures),
-                #                       "stdev": None }
-
-                tag_captures.extend(thread_captures)
-            tag_captures.sort(key=lambda c: c[0])
-
-            tag_results = None
             if len(tag_captures):
                 captures_1m = None; captures_5m = None; captures_30m = None; captures_60m = None
                 stats_1m = None; stats_5m = None; stats_30m = None; stats_60m = None
@@ -579,23 +600,23 @@ class Profiler:
                 if captures_5m:  captures_30m = find_window_start(tag_captures, now - 30*60, hi=captures_5m)
                 if captures_30m: captures_60m = find_window_start(tag_captures, now - 60*60, hi=captures_30m)
 
-                stats_all                  = calc_stats(tag_captures, 0, key=lambda c: c[1])
-                if captures_1m:  stats_1m  = calc_stats(tag_captures, captures_1m, key=lambda c: c[1])
-                if captures_5m:  stats_5m  = calc_stats(tag_captures, captures_5m, key=lambda c: c[1])
-                if captures_30m: stats_30m = calc_stats(tag_captures, captures_30m, key=lambda c: c[1])
-                if captures_60m: stats_60m = calc_stats(tag_captures, captures_60m, key=lambda c: c[1])
+                stats_all                  = calc_stats(tag_captures, 0,            None,         key=stats_key, threads_key=lambda c: c["thread_ident"])
+                if captures_1m:  stats_1m  = calc_stats(tag_captures, captures_1m,  None,         key=stats_key)
+                if captures_5m:  stats_5m  = calc_stats(tag_captures, captures_5m,  captures_1m,  key=stats_key)
+                if captures_30m: stats_30m = calc_stats(tag_captures, captures_30m, captures_5m,  key=stats_key)
+                if captures_60m: stats_60m = calc_stats(tag_captures, captures_60m, captures_30m, key=stats_key)
 
-                tag_results = { "name":      tag,
-                                "super":     tag_entry["super"],
-                                "count":     len(tag_captures),
-                                "threads":   len(tag_entry["threads"]),
-                                "stats_all": stats_all,
-                                "stats_1m":  stats_1m,
-                                "stats_5m":  stats_5m,
-                                "stats_30m": stats_30m,
-                                "stats_60m": stats_60m }
+                if stats_all["count"]:
+                    results[tag] = { "name":      tag,
+                                     "super":     tag_entry["super"],
+                                     "stats_all": stats_all,
+                                     "stats_1m":  stats_1m,
+                                     "stats_5m":  stats_5m,
+                                     "stats_30m": stats_30m,
+                                     "stats_60m": stats_60m }
 
-                results[tag] = tag_results
+            # Yield to avoid bogging down the instance
+            time.sleep(0.001)
 
         return results
 
@@ -617,22 +638,21 @@ class Profiler:
 
         def print_tag_results(tag, level):
             ind = "  "*level
-            name = tag["name"]; count = tag["count"]; threads = tag["threads"]
+            name = tag["name"]
             stats_all = tag["stats_all"]; stats_1m = tag["stats_1m"]; stats_5m = tag["stats_5m"]; stats_30m = tag["stats_30m"]; stats_60m = tag["stats_60m"]
             results_str  =     f" {ind}{name}\n"
-            results_str +=     f" {ind}  Samples  : {count} from {threads} thread{'s' if threads > 1 else ''}\n"
+            results_str +=     f" {ind}  Samples  : {stats_all["count"]} from {stats_all["threads"]} thread{'s' if stats_all["threads"] > 1 else ''}\n"
             if stats_all != None:
-                results_str += f" {ind}  Total    : {pst(stats_all["mean"]*count)}\n"
-                results_str += f" {ind}              {'Mean':^15} | {'Median':^15} | {'Min':^15} | {'Max':^15} | {'St. dev':^15}\n"
-                results_str += f" {ind}  Stats    : ({pst(stats_all["mean"]):^15} | {pst(stats_all["median"]):^15} | {pst(stats_all["min"]):^15} | {pst(stats_all["max"]):^15} | {pst(stats_all["stdev"]):^15})\n"
+                results_str += f" {ind}              {'Mean':^15} | {'Median':^15} | {'Min':^15} | {'Max':^15} | {'St. dev':^15} | {'Total':^15}\n"
+                results_str += f" {ind}  Stats    : ({pst(stats_all["mean"]):^15} | {pst(stats_all["median"]):^15} | {pst(stats_all["min"]):^15} | {pst(stats_all["max"]):^15} | {pst(stats_all["stdev"]):^15} | {pst(stats_all["sum"]):^15})\n"
             if stats_1m != None:
-                results_str += f" {ind}     1m    : ({pst(stats_1m["mean"]):^15} | {pst(stats_1m["median"]):^15} | {pst(stats_1m["min"]):^15} | {pst(stats_1m["max"]):^15} | {pst(stats_1m["stdev"]):^15})\n"
+                results_str += f" {ind}   0-1m    : ({pst(stats_1m["mean"]):^15} | {pst(stats_1m["median"]):^15} | {pst(stats_1m["min"]):^15} | {pst(stats_1m["max"]):^15} | {pst(stats_1m["stdev"]):^15} | {pst(stats_1m["sum"]):^15})\n"
             if stats_5m != None:
-                results_str += f" {ind}     5m    : ({pst(stats_5m["mean"]):^15} | {pst(stats_5m["median"]):^15} | {pst(stats_5m["min"]):^15} | {pst(stats_5m["max"]):^15} | {pst(stats_5m["stdev"]):^15})\n"
+                results_str += f" {ind}   1-5m    : ({pst(stats_5m["mean"]):^15} | {pst(stats_5m["median"]):^15} | {pst(stats_5m["min"]):^15} | {pst(stats_5m["max"]):^15} | {pst(stats_5m["stdev"]):^15} | {pst(stats_5m["sum"]):^15})\n"
             if stats_30m != None:
-                results_str += f" {ind}    30m    : ({pst(stats_30m["mean"]):^15} | {pst(stats_30m["median"]):^15} | {pst(stats_30m["min"]):^15} | {pst(stats_30m["max"]):^15} | {pst(stats_30m["stdev"]):^15})\n"
+                results_str += f" {ind}  5-30m    : ({pst(stats_30m["mean"]):^15} | {pst(stats_30m["median"]):^15} | {pst(stats_30m["min"]):^15} | {pst(stats_30m["max"]):^15} | {pst(stats_30m["stdev"]):^15} | {pst(stats_30m["sum"]):^15})\n"
             if stats_60m != None:
-                results_str += f" {ind}    60m    : ({pst(stats_60m["mean"]):^15} | {pst(stats_60m["median"]):^15} | {pst(stats_60m["min"]):^15} | {pst(stats_60m["max"]):^15} | {pst(stats_60m["stdev"]):^15})\n"
+                results_str += f" {ind} 30-60m    : ({pst(stats_60m["mean"]):^15} | {pst(stats_60m["median"]):^15} | {pst(stats_60m["min"]):^15} | {pst(stats_60m["max"]):^15} | {pst(stats_60m["stdev"]):^15} | {pst(stats_60m["sum"]):^15})\n"
             return results_str
 
         results_str = ""
