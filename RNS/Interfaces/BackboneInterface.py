@@ -61,12 +61,26 @@ class BackboneInterface(Interface):
     fast_flapping_lock  = threading.Lock()
     fast_flapping       = {}
 
+    DP_IC_HIGH_WM_PCT   = 85
+    DP_IC_MID_WM_PCT    = 10
+    DP_IC_LOW_WM_PCT    = 1
+    DP_IC_INTERVAL      = 0.250
+    DP_IC_TRIGGER       = 1.5
+    DP_IC_RCVBUF        = 32768
+    DP_IC_IF_HEADROOM   = 32
+    DP_IC_PENALTY       = 1.5
+
     epoll = None
     listener_filenos = {}
     spawned_interface_filenos = {}
     epoll = None
-    _job_active = False
-    _job_lock = threading.Lock()
+
+    _job_active     = False
+    _ic_job_active  = False
+    _job_lock       = threading.Lock()
+    _ic_job_lock    = threading.Lock()
+    _dp_ic_lock     = threading.Lock()
+    _dp_ic_snapshot = 0
 
     @staticmethod
     def get_address_for_if(name, bind_port, prefer_ipv6=False):
@@ -247,7 +261,8 @@ class BackboneInterface(Interface):
 
     @staticmethod
     def start():
-        if not BackboneInterface._job_active: threading.Thread(target=BackboneInterface.__job, daemon=True).start()
+        if not BackboneInterface._job_active:    threading.Thread(target=BackboneInterface.__job, daemon=True).start()
+        if not BackboneInterface._ic_job_active: threading.Thread(target=BackboneInterface.__dp_ic_job, daemon=True).start()
 
     @staticmethod
     def ensure_epoll():
@@ -288,7 +303,7 @@ class BackboneInterface(Interface):
             RNS.log(f"Attempt to register invalid file descriptor {fileno}", RNS.LOG_WARNING)
             return
 
-        try: BackboneInterface.epoll.register(fileno, select.EPOLLIN)
+        try: BackboneInterface.epoll.register(fileno, select.EPOLLIN | select.EPOLLHUP)
         except Exception as e:
             RNS.log(f"An error occurred while registering EPOLLIN for file descriptor {fileno}: {e}", RNS.LOG_WARNING)
 
@@ -319,12 +334,146 @@ class BackboneInterface(Interface):
         if interface.socket:
             fileno = interface.socket.fileno()
             if fileno in BackboneInterface.spawned_interface_filenos:
-                try: BackboneInterface.epoll.modify(fileno, select.EPOLLIN | select.EPOLLOUT)
+                try:
+                    events = select.EPOLLOUT | select.EPOLLHUP
+                    if not interface.dp_ingress_gated: events |= select.EPOLLIN
+                    BackboneInterface.epoll.modify(fileno, events)
                 except Exception as e:
                     if   str(e).endswith("No such file or directory"): pass
                     elif str(e).endswith("Bad file descriptor"):       pass
                     else: RNS.log(f"Error occurred on {interface} while modifying socket EPOLL state: {e}", RNS.LOG_WARNING)
                     raise e
+
+    @staticmethod
+    def __throttle_ingress(interface, hold=None):
+        if interface.dp_ingress_gated: return False
+        try:
+            fileno = interface.socket.fileno()
+            if fileno in BackboneInterface.spawned_interface_filenos:
+                interface.dp_ingress_gated = True
+                interface.dp_ingress_tcount += 1
+                events = select.EPOLLHUP
+                if len(interface.transmit_buffer) > 0: events |= select.EPOLLOUT
+                BackboneInterface.epoll.modify(fileno, events)
+                if hold: interface.dp_ingress_hold = time.time() + hold
+                RNS.log(f"Ingress throttled on {interface}", RNS.LOG_NOTICE) if RNS.sl(RNS.LOG_NOTICE) else None
+                return True
+
+        except Exception as e: RNS.log(f"Error throttling {interface}: {e}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+        return False
+
+    @staticmethod
+    def __release_ingress(interface):
+        if not interface.dp_ingress_gated: return False
+        try:
+            fileno = interface.socket.fileno()
+            if fileno in BackboneInterface.spawned_interface_filenos:
+                events = select.EPOLLIN | select.EPOLLHUP
+                if len(interface.transmit_buffer) > 0: events |= select.EPOLLOUT
+                BackboneInterface.epoll.modify(fileno, events)
+                interface.dp_ingress_gated = False
+                RNS.log(f"Released ingress throttle on {interface}", RNS.LOG_NOTICE) if RNS.sl(RNS.LOG_NOTICE) else None
+                return True
+
+        except Exception as e: RNS.log(f"Error releasing throttle on {interface}: {e}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+        return False
+
+    @staticmethod
+    def _throttle_immediate(q_depth):
+        with BackboneInterface._dp_ic_lock:
+            st = time.time()
+            interfaces = list(BackboneInterface.spawned_interface_filenos.values())
+            producers = [iface for iface in interfaces if iface.dp_ingress_packets > 0]
+
+            if producers:
+                producers.sort(key=lambda p: p.dp_ingress_packets, reverse=True)
+                selected = producers[0]
+
+                now   = time.time()
+                span  = now - BackboneInterface._dp_ic_snapshot
+                total = sum(iface.dp_ingress_packets for iface in producers)
+                avail = sum(iface.dp_ingress_bytes for iface in interfaces) / span
+                share = selected.dp_ingress_packets / total
+                rate  = selected.dp_ingress_packets / span
+                speed = selected.dp_ingress_bytes   / span
+                data  = selected.dp_ingress_bytes
+                pkts  = selected.dp_ingress_packets
+                alloc = 1/((max(len(interfaces), BackboneInterface.DP_IC_IF_HEADROOM))*BackboneInterface.DP_IC_PENALTY)
+                hold = (avail/(avail*alloc))*span
+
+                if BackboneInterface.__throttle_ingress(selected, hold=hold):
+                    taken = time.time()-st
+                    if RNS.sl(RNS.LOG_DEBUG):
+                        RNS.log(f"Throttled producer with {pkts} packets at {RNS.prettysize(rate, suffix='pps')} / {RNS.prettyspeed(speed*8)}, {round(share*100.0, 2)}% ingress share", RNS.LOG_DEBUG)
+                        RNS.log(f"Available ingress budget {RNS.prettyspeed(avail*8)}, hard-allocated {round(alloc*100.0, 2)}% ({RNS.prettyspeed(avail*alloc*8)}), handled in {RNS.prettyshorttime(taken, compact=True, tight=True)}", RNS.LOG_DEBUG)
+                        RNS.log(f"Holding for {RNS.prettyshorttime(hold, compact=True, tight=True)}, throttling handled in {RNS.prettyshorttime(taken, compact=True, tight=True)} at depth {q_depth}", RNS.LOG_DEBUG)
+
+    @staticmethod
+    def __dp_ic_job():
+        with BackboneInterface._ic_job_lock:
+            if BackboneInterface._ic_job_active: return
+            else:
+                dql = RNS.Reticulum.default_data_queue_length() or RNS.Transport.INBOUND_DA_QUEUE_LENGTH
+                BackboneInterface.DP_IC_HIGH_WM  = max(4, int((BackboneInterface.DP_IC_HIGH_WM_PCT/100.0) * dql))
+                BackboneInterface.DP_IC_MID_WM   = max(2, int((BackboneInterface.DP_IC_MID_WM_PCT/100.0)  * dql))
+                BackboneInterface.DP_IC_LOW_WM   = max(0, int((BackboneInterface.DP_IC_LOW_WM_PCT/100.0)  * dql))
+                BackboneInterface._ic_job_active = True
+                RNS.log(f"Started dataplane ingress control: High/mid/low water marks are {BackboneInterface.DP_IC_HIGH_WM}/{BackboneInterface.DP_IC_MID_WM}/{BackboneInterface.DP_IC_LOW_WM} packets", RNS.LOG_DEBUG)
+                try:
+                    while True:
+                        time.sleep(BackboneInterface.DP_IC_INTERVAL)
+                        try:
+                            if RNS.Transport.inbound_queues != None: q_depth = RNS.Transport.inbound_queues.qsize(RNS.Transport.TC_DATA)
+                            else: continue
+                        except Exception: continue
+
+                        with BackboneInterface._dp_ic_lock:
+                            st = time.time()
+                            interfaces = list(BackboneInterface.spawned_interface_filenos.values())
+                            # active = [iface for iface in interfaces if iface.dp_ingress_bytes > 0]
+
+                            if q_depth > BackboneInterface.DP_IC_MID_WM:
+                                producers = [iface for iface in interfaces if iface.dp_ingress_packets > 0]
+                                if producers:
+                                    producers.sort(key=lambda p: p.dp_ingress_packets, reverse=True)
+                                    selected = producers[0]
+
+                                    now   = time.time()
+                                    span  = max(now - BackboneInterface._dp_ic_snapshot, 0.001)
+                                    total = sum(iface.dp_ingress_packets for iface in producers)
+                                    avail = sum(iface.dp_ingress_bytes for iface in interfaces) / span
+                                    mean  = total / max(len(producers), 2)
+                                    share = selected.dp_ingress_packets / total
+                                    rate  = selected.dp_ingress_packets / span
+                                    speed = selected.dp_ingress_bytes   / span
+                                    data  = selected.dp_ingress_bytes
+                                    pkts  = selected.dp_ingress_packets
+                                    alloc = 1/((max(len(interfaces), BackboneInterface.DP_IC_IF_HEADROOM))*BackboneInterface.DP_IC_PENALTY)
+                                    hold = (avail/max(avail*alloc, 1))*span
+
+                                    if BackboneInterface.__throttle_ingress(selected, hold=hold):
+                                        taken = time.time()-st
+                                        if RNS.sl(RNS.LOG_DEBUG):
+                                            RNS.log(f"Throttled producer with {pkts} packets at {RNS.prettysize(rate, suffix='pps')} / {RNS.prettyspeed(speed*8)}, {round(share*100.0, 2)}% ingress share", RNS.LOG_DEBUG)
+                                            RNS.log(f"Available ingress budget {RNS.prettyspeed(avail*8)}, hard-allocated {round(alloc*100.0, 2)}% ({RNS.prettyspeed(avail*alloc*8)}), handled in {RNS.prettyshorttime(taken, compact=True, tight=True)}", RNS.LOG_DEBUG)
+                                            RNS.log(f"Holding for {RNS.prettyshorttime(hold, compact=True, tight=True)}, throttling handled in {RNS.prettyshorttime(taken, compact=True, tight=True)}", RNS.LOG_DEBUG)
+
+                            elif q_depth < BackboneInterface.DP_IC_LOW_WM:
+                                now = time.time()
+                                for iface in interfaces:
+                                    if iface.dp_ingress_gated:
+                                        if iface.dp_ingress_hold and now < iface.dp_ingress_hold: continue
+                                        BackboneInterface.__release_ingress(iface)
+                                        break
+
+                            BackboneInterface._dp_ic_snapshot = time.time()
+                            for iface in interfaces:
+                                iface.dp_ingress_bytes   = 0
+                                iface.dp_ingress_packets = 0
+
+                except Exception as e:
+                    RNS.log(f"BackboneInterface ingress control error: {e}", RNS.LOG_ERROR)
+                    RNS.trace_exception(e)
 
     @staticmethod
     def __job():
@@ -340,13 +489,16 @@ class BackboneInterface(Interface):
                                 spawned_interface = BackboneInterface.spawned_interface_filenos[fileno]
                                 client_socket = spawned_interface.socket
                                 socket_valid = client_socket and fileno == client_socket.fileno()
-                                if socket_valid and (event & select.EPOLLIN):
+                                if socket_valid and (event & select.EPOLLIN) and not spawned_interface.dp_ingress_gated:
+                                    if spawned_interface.dp_ingress_gated: continue
                                     try: received_bytes = client_socket.recv(spawned_interface.HW_MTU)
                                     except Exception as e:
                                         RNS.log(f"Error while reading from {spawned_interface}: {e}", RNS.LOG_PATHING) if RNS.sl(RNS.LOG_PATHING) else None
                                         received_bytes = b""
 
-                                    if len(received_bytes): spawned_interface.receive(received_bytes)
+                                    if len(received_bytes):
+                                        spawned_interface.dp_ingress_bytes += len(received_bytes)
+                                        spawned_interface.receive(received_bytes)
                                     else:
                                         BackboneInterface.deregister_fileno(fileno); client_socket.close()
                                         try:
@@ -393,9 +545,11 @@ class BackboneInterface(Interface):
 
                                     spawned_interface.transmit_buffer = spawned_interface.transmit_buffer[written:]
                                     try:
-                                        if len(spawned_interface.transmit_buffer) == 0: BackboneInterface.epoll.modify(fileno, select.EPOLLIN)
-                                    except Exception as e:
-                                        RNS.log(f"Error while setting EPOLLIN on {spawned_interface}: {e}", RNS.LOG_ERROR)
+                                        if len(spawned_interface.transmit_buffer) == 0:
+                                            events = select.EPOLLHUP
+                                            if not spawned_interface.dp_ingress_gated: events |= select.EPOLLIN
+                                            BackboneInterface.epoll.modify(fileno, events)
+                                    except Exception as e: RNS.log(f"Error while setting EPOLLIN on {spawned_interface}: {e}", RNS.LOG_ERROR)
 
                                     spawned_interface.txb += written
                                     if spawned_interface.parent_interface: spawned_interface.parent_interface.txb += written
@@ -423,6 +577,7 @@ class BackboneInterface(Interface):
                                     try:
                                         client_socket, address = server_socket.accept()
                                         client_socket.setblocking(0)
+                                        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BackboneInterface.DP_IC_RCVBUF)
                                         if not owner_interface.incoming_connection(client_socket):
                                             try: client_socket.close()
                                             except Exception as e: RNS.log(f"Error while closing socket for failed incoming connection: {e}", RNS.LOG_WARNING)
@@ -791,7 +946,8 @@ class BackboneClientInterface(Interface):
             self.rxb += len(data)
             if hasattr(self, "parent_interface") and self.parent_interface != None:
                 self.parent_interface.rxb += len(data)
-                        
+
+            self.dp_ingress_packets += 1
             self.owner.inbound(data, self)
 
     def process_outgoing(self, data):

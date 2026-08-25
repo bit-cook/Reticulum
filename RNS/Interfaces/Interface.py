@@ -157,6 +157,11 @@ class Interface:
         self.protocol_violations = 0
         self.ifac_violations     = 0
         self.packet_filter_hits  = 0
+        self.dp_ingress_tcount   = 0
+        self.dp_ingress_bytes    = 0
+        self.dp_ingress_packets  = 0
+        self.dp_ingress_hold     = None
+        self.dp_ingress_gated    = False
 
         self.reports_phy_stats = False
         self.r_stat_rssi       = None

@@ -44,18 +44,22 @@ from .vendor import umsgpack as umsgpack
 from RNS.Interfaces.BackboneInterface import BackboneInterface
 
 class InboundQueues:
-    __slots__ = ("_cond", "_queues", "_sizes", "_dropped")
+    __slots__ = ("_cond", "_queues", "_sizes", "_dropped", "_hw_mark")
 
-    def __init__(self, sizes):
+    def __init__(self, sizes, hw_mark=None):
         self._cond    = Condition()
         self._queues  = [deque() for _ in sizes]
         self._sizes   = sizes
         self._dropped = [0 for _ in sizes]
+        self._hw_mark = hw_mark or max(128, BackboneInterface.DP_IC_HIGH_WM)
+        RNS.log(f"hw mark at {self._hw_mark}", RNS.LOG_CRITICAL)
 
     def put(self, traffic_class, item, block=False, timeout=None):
         with self._cond:
-            q = self._queues[traffic_class]
-            if len(q) >= self._sizes[traffic_class]:
+            q = self._queues[traffic_class]; ql = len(q)
+            if traffic_class == Transport.TC_DATA and ql >= self._hw_mark:
+                BackboneInterface._throttle_immediate(ql)
+            if ql >= self._sizes[traffic_class]:
                 self._dropped[traffic_class] += 1
                 raise Full
             q.append(item)
