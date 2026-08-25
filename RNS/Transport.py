@@ -2167,14 +2167,10 @@ class Transport:
         # announces, queueing rebroadcasts of these, and removal
         # of queued announce rebroadcasts once handed to the next node.
         if packet.packet_type == RNS.Packet.ANNOUNCE:
-            local_destination = None
-            with Transport.destinations_map_lock:
-                if packet.destination_hash in Transport.destinations_map:
-                    local_destination = Transport.destinations_map[packet.destination_hash]
-
             announce_valid = RNS.Identity.validate_announce(packet)
             if not announce_valid: return packet.receiving_interface.protocol_violation("Invalid announce") if packet.receiving_interface else None
 
+            local_destination = Transport.destinations_map.get(packet.destination_hash)
             if local_destination == None and announce_valid:
                 if packet.transport_id != None:
                     received_from = packet.transport_id
@@ -2541,11 +2537,7 @@ class Transport:
         # Handling for link requests to local destinations
         elif packet.packet_type == RNS.Packet.LINKREQUEST and not link_request_handled:
             if packet.transport_id == None or packet.transport_id == Transport.identity.hash:
-                destination = None
-                with Transport.destinations_map_lock:
-                    if packet.destination_hash in Transport.destinations_map:
-                        destination = Transport.destinations_map[packet.destination_hash]
-
+                destination = Transport.destinations_map.get(packet.destination_hash)
                 if destination and destination.type == packet.destination_type:
                     path_mtu       = RNS.Link.mtu_from_lr_packet(packet)
                     mode           = RNS.Link.mode_from_lr_packet(packet)
