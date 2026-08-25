@@ -48,6 +48,7 @@ SCENARIO_DESCRIPTIONS = {
     "transit_link_475":     "LINK transit relay via link table, cross-interface, 475 B",
     "transit_link_1024":    "LINK transit relay via link table, cross-interface, 1024 B",
     "transit_link_16384":   "LINK transit relay via link table, cross-interface, 16384 B",
+    "transit_link_32768":   "LINK transit relay via link table, cross-interface, 32768 B",
     "terminus_link":        "LINK terminus delivery, token decrypt, 135 B",
     "terminus_single":      "SINGLE local delivery, ephemeral-key decrypt, 135 B",
     "announce_ingress":     "Announce ingress, fresh destinations, validation + path insert",
@@ -65,6 +66,7 @@ DEFAULT_PACKETS = {
     "transit_link_475":       {"inline": 20000, "drainer": 20000},
     "transit_link_1024":      {"inline": 20000, "drainer": 20000},
     "transit_link_16384":     {"inline": 10000, "drainer": 10000},
+    "transit_link_32768":     {"inline": 10000, "drainer": 10000},
     "terminus_link":          {"inline": 6000,  "drainer": 6000},
     "terminus_single":        {"inline": 3000,  "drainer": 3000},
     "announce_ingress":       {"inline": 1000,  "drainer": 1000},
@@ -337,7 +339,7 @@ def build_scenarios(instance, interface, interface_b, requested=None):
     )
 
     # --- LINK transit relay (cross-interface) ------------------------------
-    sizes = [("135", 135), ("475", 475), ("1024", 1024), ("16384", 16384)]
+    sizes = [("135", 135), ("475", 475), ("1024", 1024), ("16384", 16384), ("32768", 32768)]
     for suffix, size in sizes:
         name = f"transit_link_{suffix}"
 
@@ -662,7 +664,7 @@ def print_pps_matrix(rows):
     if not rows:
         return
     print("-" * 72)
-    print("Transport Throughput - PPS matrix (median of runs)")
+    print("Transport Throughput, median of runs")
     print(f"  {'scenario':<22}{'direct':>14}{'drainer':>14}")
     print("  " + "-" * 70)
     for name, inline_pps, drainer_pps, fsize in rows:
@@ -820,6 +822,7 @@ class TestTransportThroughput(unittest.TestCase):
             "transit_link_475",
             "transit_link_1024",
             "transit_link_16384",
+            "transit_link_32768",
         ])
 
     def test_02_delivery_throughput(self):
