@@ -272,12 +272,14 @@ class Packet:
                 self.data = self.raw[DST_LEN+3:]
                 if len(self.destination_hash) != DST_LEN: raise ValueError("Malformed destination hash field")
 
+            if len(self.data) == 0: raise ValueError("Zero-length data field")
+
             self.packed = False
             self.update_hash()
             return True
 
         except Exception as e:
-            RNS.log(f"Received malformed packet, dropping it. The contained exception was: {e}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
+            RNS.log(f"Received malformed packet, dropping it. The contained exception was: {e}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
             return False
 
     def send(self):

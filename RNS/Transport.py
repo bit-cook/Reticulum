@@ -1796,7 +1796,8 @@ class Transport:
 
         # Ingress limit announces early
         if packet.packet_type == RNS.Packet.ANNOUNCE:
-            if not tc: traffic_class = Transport.TC_ANNOUNCE
+            if len(raw) > RNS.Reticulum.MTU: return packet.receiving_interface.protocol_violation(f"Excessive announce packet frame size of {len(raw)} bytes") if packet.receiving_interface else None
+            if traffic_class < Transport.TC_ANNOUNCE: traffic_class = Transport.TC_ANNOUNCE
             announce_signature_valid = RNS.Identity.validate_announce(packet, only_validate_signature=True, signal_blackholed=True)
             if announce_signature_valid == "blackholed": return None
             elif not announce_signature_valid:
@@ -1820,7 +1821,7 @@ class Transport:
 
         # Ingress limit path requests early
         elif packet.destination_hash == Transport.pr_destination_hash:
-            traffic_class = Transport.TC_PATH_REQUEST
+            if traffic_class < Transport.TC_PATH_REQUEST: traffic_class = Transport.TC_PATH_REQUEST
             if not len(packet.data) >= RNS.Identity.TRUNCATED_HASHLENGTH//8: return
             else:
                 tag_bytes = None
