@@ -108,8 +108,8 @@ class Reticulum:
     discovery significantly increases throughput over fast links.
     """
 
-    MAX_QUEUED_ANNOUNCES = 16384
-    QUEUED_ANNOUNCE_LIFE = 60*60*24
+    MAX_QUEUED_ANNOUNCES = 4096
+    QUEUED_ANNOUNCE_LIFE = 60*60*3
 
     ANNOUNCE_CAP = 2
     """
