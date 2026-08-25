@@ -52,7 +52,6 @@ class InboundQueues:
         self._sizes   = sizes
         self._dropped = [0 for _ in sizes]
         self._hw_mark = hw_mark or max(128, BackboneInterface.DP_IC_HIGH_WM)
-        RNS.log(f"hw mark at {self._hw_mark}", RNS.LOG_CRITICAL)
 
     def put(self, traffic_class, item, block=False, timeout=None):
         with self._cond:
@@ -176,7 +175,6 @@ class Transport:
     # Notes on memory usage: 1 megabyte of memory can store approximately
     # 55.100 path table entries or approximately 22.300 link table entries.
 
-    link_fp_cache               = {}
     announce_table              = {}           # A table for storing announces currently waiting to be retransmitted
     path_table                  = {}           # A lookup table containing the next hop to a given destination
     reverse_table               = {}           # A lookup table for storing packet hashes used to return proofs and replies
