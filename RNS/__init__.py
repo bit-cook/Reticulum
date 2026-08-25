@@ -588,18 +588,18 @@ class Profiler:
             name = tag["name"]
             stats_all = tag["stats_all"]; stats_1m = tag["stats_1m"]; stats_5m = tag["stats_5m"]; stats_30m = tag["stats_30m"]; stats_60m = tag["stats_60m"]
             results_str  =     f" {ind}{name}\n"
-            results_str +=     f" {ind}  Samples  : {stats_all["count"]} from {stats_all["threads"]} thread{'s' if stats_all["threads"] > 1 else ''}\n"
+            results_str +=     f" {ind}  Samples  : {stats_all['count']} from {stats_all['threads']} thread{'s' if stats_all['threads'] > 1 else ''}\n"
             if stats_all != None:
                 results_str += f" {ind}              {'Mean':^15} | {'Median':^15} | {'Min':^15} | {'Max':^15} | {'St. dev':^15} | {'Total':^15}\n"
-                results_str += f" {ind}  Stats    : ({pst(stats_all["mean"]):^15} | {pst(stats_all["median"]):^15} | {pst(stats_all["min"]):^15} | {pst(stats_all["max"]):^15} | {pst(stats_all["stdev"]):^15} | {pst(stats_all["sum"]):^15})\n"
+                results_str += f" {ind}  Stats    : ({pst(stats_all['mean']):^15} | {pst(stats_all['median']):^15} | {pst(stats_all['min']):^15} | {pst(stats_all['max']):^15} | {pst(stats_all['stdev']):^15} | {pst(stats_all['sum']):^15})\n"
             if stats_1m != None:
-                results_str += f" {ind}   0-1m    : ({pst(stats_1m["mean"]):^15} | {pst(stats_1m["median"]):^15} | {pst(stats_1m["min"]):^15} | {pst(stats_1m["max"]):^15} | {pst(stats_1m["stdev"]):^15} | {pst(stats_1m["sum"]):^15})\n"
+                results_str += f" {ind}   0-1m    : ({pst(stats_1m['mean']):^15} | {pst(stats_1m['median']):^15} | {pst(stats_1m['min']):^15} | {pst(stats_1m['max']):^15} | {pst(stats_1m['stdev']):^15} | {pst(stats_1m['sum']):^15})\n"
             if stats_5m != None:
-                results_str += f" {ind}   1-5m    : ({pst(stats_5m["mean"]):^15} | {pst(stats_5m["median"]):^15} | {pst(stats_5m["min"]):^15} | {pst(stats_5m["max"]):^15} | {pst(stats_5m["stdev"]):^15} | {pst(stats_5m["sum"]):^15})\n"
+                results_str += f" {ind}   1-5m    : ({pst(stats_5m['mean']):^15} | {pst(stats_5m['median']):^15} | {pst(stats_5m['min']):^15} | {pst(stats_5m['max']):^15} | {pst(stats_5m['stdev']):^15} | {pst(stats_5m['sum']):^15})\n"
             if stats_30m != None:
-                results_str += f" {ind}  5-30m    : ({pst(stats_30m["mean"]):^15} | {pst(stats_30m["median"]):^15} | {pst(stats_30m["min"]):^15} | {pst(stats_30m["max"]):^15} | {pst(stats_30m["stdev"]):^15} | {pst(stats_30m["sum"]):^15})\n"
+                results_str += f" {ind}  5-30m    : ({pst(stats_30m['mean']):^15} | {pst(stats_30m['median']):^15} | {pst(stats_30m['min']):^15} | {pst(stats_30m['max']):^15} | {pst(stats_30m['stdev']):^15} | {pst(stats_30m['sum']):^15})\n"
             if stats_60m != None:
-                results_str += f" {ind} 30-60m    : ({pst(stats_60m["mean"]):^15} | {pst(stats_60m["median"]):^15} | {pst(stats_60m["min"]):^15} | {pst(stats_60m["max"]):^15} | {pst(stats_60m["stdev"]):^15} | {pst(stats_60m["sum"]):^15})\n"
+                results_str += f" {ind} 30-60m    : ({pst(stats_60m['mean']):^15} | {pst(stats_60m['median']):^15} | {pst(stats_60m['min']):^15} | {pst(stats_60m['max']):^15} | {pst(stats_60m['stdev']):^15} | {pst(stats_60m['sum']):^15})\n"
             return results_str
 
         results_str = ""

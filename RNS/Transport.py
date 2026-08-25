@@ -164,6 +164,8 @@ class Transport:
     destinations_map            = {}           # Destination hash map of active destinations
     pending_links               = []           # Links that are being established
     active_links                = []           # Links that are active
+    pending_links_map           = {}           # Link ID hash map of pending links
+    active_links_map            = {}           # Link ID hash map of active links
     packet_hashlist             = set()        # A list of packet hashes for duplicate detection
     packet_hashlist_prev        = set()
     receipts                    = []           # Receipts of all outgoing packets for proof processing
@@ -171,6 +173,7 @@ class Transport:
     # Notes on memory usage: 1 megabyte of memory can store approximately
     # 55.100 path table entries or approximately 22.300 link table entries.
 
+    link_fp_cache               = {}
     announce_table              = {}           # A table for storing announces currently waiting to be retransmitted
     path_table                  = {}           # A lookup table containing the next hop to a given destination
     reverse_table               = {}           # A lookup table for storing packet hashes used to return proofs and replies
@@ -714,14 +717,18 @@ class Transport:
 
                                 closed_pending_links.append(link)
 
-                        for closed_link in closed_pending_links: Transport.pending_links.remove(closed_link)
+                        for closed_link in closed_pending_links:
+                            Transport.pending_links.remove(closed_link)
+                            Transport.pending_links_map.pop(closed_link.link_id, None)
 
                     with Transport.active_links_lock:
                         closed_links = []
                         for link in Transport.active_links:
                             if link.status == RNS.Link.CLOSED: closed_links.append(link)
 
-                        for closed_link in closed_links: Transport.active_links.remove(closed_link)
+                        for closed_link in closed_links:
+                            Transport.active_links.remove(closed_link)
+                            Transport.active_links_map.pop(closed_link.link_id, None)
 
                     Transport.links_last_checked = time.time()
 
@@ -2009,9 +2016,10 @@ class Transport:
             if packet.transport_id != None and packet.packet_type != RNS.Packet.ANNOUNCE:
                 if not packet.transport_id == Transport.identity.hash: return
                 else:
-                    if packet.destination_hash in Transport.path_table:
-                        next_hop = Transport.path_table[packet.destination_hash][IDX_PT_NEXT_HOP]
-                        remaining_hops = Transport.path_table[packet.destination_hash][IDX_PT_HOPS]
+                    path_entry = Transport.path_table.get(packet.destination_hash)
+                    if path_entry != None:
+                        next_hop = path_entry[IDX_PT_NEXT_HOP]
+                        remaining_hops = path_entry[IDX_PT_HOPS]
                         
                         if remaining_hops > 1:
                             # Just increase hop count and transmit
@@ -2044,7 +2052,7 @@ class Transport:
                                 new_raw += struct.pack("!B", packet.hops)
                                 new_raw += packet.raw[2:]
 
-                        outbound_interface = Transport.path_table[packet.destination_hash][IDX_PT_RVCD_IF]
+                        outbound_interface = path_entry[IDX_PT_RVCD_IF]
 
                         if packet.packet_type == RNS.Packet.LINKREQUEST:
                             now = time.time()
@@ -2096,11 +2104,11 @@ class Transport:
                                               outbound_interface,           # 1: Outbound interface
                                               time.time() ]                 # 2: Timestamp
 
-                            with Transport.reverse_table_lock: Transport.reverse_table[packet.getTruncatedHash()] = reverse_entry
+                            with Transport.reverse_table_lock: Transport.reverse_table[packet.truncated_packet_hash] = reverse_entry
 
                         if Transport.local_hops_delta != 0 and from_local_client and not to_local_client: new_raw = Transport.mangle_hops(new_raw, Transport.local_hops_delta)
                         Transport.transmit(outbound_interface, new_raw)
-                        with Transport.path_table_lock: Transport.path_table[packet.destination_hash][IDX_PT_TIMESTAMP] = time.time()
+                        path_entry[IDX_PT_TIMESTAMP] = time.time()
 
                     else:
                         # TODO: There should probably be some kind of REJECT
@@ -2151,25 +2159,18 @@ class Transport:
                         Transport.transmit(outbound_interface, new_raw)
                         Transport.link_table[packet.destination_hash][IDX_LT_TIMESTAMP] = time.time()
 
-                    else:
-                        RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_WARNING) # TODO: Remove
-                    
-                    # TODO: Can we return safely here? Test and possibly enable this at some point.
-                    return
+                    else: RNS.log(f"No-outbound return on link packet from {packet.receiving_interface}", RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
 
+                    return
 
         # Announce handling. Handles logic related to incoming
         # announces, queueing rebroadcasts of these, and removal
         # of queued announce rebroadcasts once handed to the next node.
         if packet.packet_type == RNS.Packet.ANNOUNCE:
-            local_destination = None
-            with Transport.destinations_map_lock:
-                if packet.destination_hash in Transport.destinations_map:
-                    local_destination = Transport.destinations_map[packet.destination_hash]
-
             announce_valid = RNS.Identity.validate_announce(packet)
             if not announce_valid: return packet.receiving_interface.protocol_violation("Invalid announce") if packet.receiving_interface else None
 
+            local_destination = Transport.destinations_map.get(packet.destination_hash)
             if local_destination == None and announce_valid:
                 if packet.transport_id != None:
                     received_from = packet.transport_id
@@ -2536,11 +2537,7 @@ class Transport:
         # Handling for link requests to local destinations
         elif packet.packet_type == RNS.Packet.LINKREQUEST and not link_request_handled:
             if packet.transport_id == None or packet.transport_id == Transport.identity.hash:
-                destination = None
-                with Transport.destinations_map_lock:
-                    if packet.destination_hash in Transport.destinations_map:
-                        destination = Transport.destinations_map[packet.destination_hash]
-
+                destination = Transport.destinations_map.get(packet.destination_hash)
                 if destination and destination.type == packet.destination_type:
                     path_mtu       = RNS.Link.mtu_from_lr_packet(packet)
                     mode           = RNS.Link.mode_from_lr_packet(packet)
@@ -2570,39 +2567,31 @@ class Transport:
         # Handling for local data packets
         elif packet.packet_type == RNS.Packet.DATA:
             if packet.destination_type == RNS.Destination.LINK:
-                with Transport.active_links_lock:
-                    for link in Transport.active_links:
-                        if link.link_id == packet.destination_hash:
-                            if link.attached_interface == packet.receiving_interface:
-                                packet.link = link
-                                if packet.context == RNS.Packet.CACHE_REQUEST:
-                                    cached_packet = Transport.get_cached_packet(packet.data)
-                                    if cached_packet != None:
-                                        if not cached_packet.unpack(): return
-                                        RNS.Packet(destination=link, data=cached_packet.data,
-                                                   packet_type=cached_packet.packet_type, context=cached_packet.context).send()
-                                
-                                else: link.receive(packet)
-                                break
-                            
-                            else:
-                                # In the strange and rare case that an interface
-                                # is partly malfunctioning, and a link-associated
-                                # packet is being received on an interface that
-                                # has failed sending, and transport has failed over
-                                # to another path, we remove this packet hash from
-                                # the filter hashlist so the link can receive the
-                                # packet when it finally arrives over another path.
-                                while packet.packet_hash in Transport.packet_hashlist:
-                                    Transport.packet_hashlist.remove(packet.packet_hash)
-                                while packet.packet_hash in Transport.packet_hashlist_prev:
-                                    Transport.packet_hashlist_prev.remove(packet.packet_hash)
-            else:
-                destination = None
-                with Transport.destinations_map_lock:
-                    if packet.destination_hash in Transport.destinations_map:
-                        destination = Transport.destinations_map[packet.destination_hash]
+                link = Transport.active_links_map.get(packet.destination_hash)
+                if link != None:
+                    if link.attached_interface == packet.receiving_interface:
+                        packet.link = link
+                        if packet.context == RNS.Packet.CACHE_REQUEST:
+                            cached_packet = Transport.get_cached_packet(packet.data)
+                            if cached_packet != None:
+                                if not cached_packet.unpack(): return
+                                RNS.Packet(destination=link, data=cached_packet.data,
+                                           packet_type=cached_packet.packet_type, context=cached_packet.context).send()
 
+                        else: link.receive(packet)
+
+                    else:
+                        # In the strange and rare case that an interface
+                        # is partly malfunctioning, and a link-associated
+                        # packet is being received on an interface that
+                        # has failed sending, and transport has failed over
+                        # to another path, we remove this packet hash from
+                        # the filter hashlist so the link can receive the
+                        # packet when it finally arrives over another path.
+                        while packet.packet_hash in Transport.packet_hashlist:      Transport.packet_hashlist.remove(packet.packet_hash)
+                        while packet.packet_hash in Transport.packet_hashlist_prev: Transport.packet_hashlist_prev.remove(packet.packet_hash)
+            else:
+                destination = Transport.destinations_map.get(packet.destination_hash)
                 if destination and destination.type == packet.destination_type:
                     packet.destination = destination
                     if destination.receive(packet):
@@ -2639,10 +2628,8 @@ class Transport:
                                     if peer_identity.validate(signature, signed_data) and not link_entry[IDX_LT_VALIDATED]:
                                         RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link_destination)} from link-request proof ({link_entry[IDX_LT_REM_HOPS]}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
                                         link_entry[IDX_LT_REM_HOPS] = packet.hops
-                                        with Transport.path_table_lock:
-                                            if link_destination in Transport.path_table:
-                                                path_entry = Transport.path_table[link_destination]
-                                                path_entry[IDX_PT_HOPS] = packet.hops
+                                        path_entry = Transport.path_table.get(link_destination)
+                                        if path_entry: path_entry[IDX_PT_HOPS] = packet.hops
 
                                     elif not link_entry[IDX_LT_VALIDATED]: RNS.log(f"Aborting link request proof path re-balancing for {RNS.prettyhexrep(link_destination)} on link {RNS.prettyhexrep(packet.destination_hash)} due to invalid signature", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
                                     else: pass
@@ -2686,65 +2673,57 @@ class Transport:
                     # Check if we can deliver it to a local pending link
                     pending_link = None
                     with Transport.pending_links_lock:
-                        for link in Transport.pending_links:
-                            if link.link_id == packet.destination_hash:
-                                if packet.hops != link.expected_hops and link.status == RNS.Link.PENDING and Transport.ALLOW_LINK_PATH_REBALANCE:
-                                    RNS.log(f"Unbalanced link path ({packet.hops}/{link.expected_hops}) detected on link {link}, validating signature for re-balancing...", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
-                                    try:
-                                        if len(packet.data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2 or len(packet.data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2+RNS.Link.LINK_MTU_SIZE:
-                                            packet_data = packet.data
-                                            signalling_bytes = b""
-                                            confirmed_mtu = None
-                                            mode = RNS.Link.mode_from_lp_packet(packet)
-                                            if mode != link.mode: raise TypeError(f"Invalid link mode {mode} in link request proof")
-                                            if len(packet_data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2+RNS.Link.LINK_MTU_SIZE:
-                                                confirmed_mtu = RNS.Link.mtu_from_lp_packet(packet)
-                                                signalling_bytes = RNS.Link.signalling_bytes(confirmed_mtu, mode)
-                                                packet_data = packet_data[:RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2]
+                        link = Transport.pending_links_map.get(packet.destination_hash)
+                        if link != None:
+                            if packet.hops != link.expected_hops and link.status == RNS.Link.PENDING and Transport.ALLOW_LINK_PATH_REBALANCE:
+                                RNS.log(f"Unbalanced link path ({packet.hops}/{link.expected_hops}) detected on link {link}, validating signature for re-balancing...", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                try:
+                                    if len(packet.data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2 or len(packet.data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2+RNS.Link.LINK_MTU_SIZE:
+                                        packet_data = packet.data
+                                        signalling_bytes = b""
+                                        confirmed_mtu = None
+                                        mode = RNS.Link.mode_from_lp_packet(packet)
+                                        if mode != link.mode: raise TypeError(f"Invalid link mode {mode} in link request proof")
+                                        if len(packet_data) == RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2+RNS.Link.LINK_MTU_SIZE:
+                                            confirmed_mtu = RNS.Link.mtu_from_lp_packet(packet)
+                                            signalling_bytes = RNS.Link.signalling_bytes(confirmed_mtu, mode)
+                                            packet_data = packet_data[:RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2]
 
-                                            peer_pub_bytes = packet_data[RNS.Identity.SIGLENGTH//8:RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2]
-                                            peer_sig_pub_bytes = link.destination.identity.get_public_key()[RNS.Link.ECPUBSIZE//2:RNS.Link.ECPUBSIZE]
+                                        peer_pub_bytes = packet_data[RNS.Identity.SIGLENGTH//8:RNS.Identity.SIGLENGTH//8+RNS.Link.ECPUBSIZE//2]
+                                        peer_sig_pub_bytes = link.destination.identity.get_public_key()[RNS.Link.ECPUBSIZE//2:RNS.Link.ECPUBSIZE]
 
-                                            signed_data = link.link_id+peer_pub_bytes+peer_sig_pub_bytes+signalling_bytes
-                                            signature = packet_data[:RNS.Identity.SIGLENGTH//8]
+                                        signed_data = link.link_id+peer_pub_bytes+peer_sig_pub_bytes+signalling_bytes
+                                        signature = packet_data[:RNS.Identity.SIGLENGTH//8]
 
-                                            if link.destination.identity.validate(signature, signed_data):
-                                                with Transport.path_table_lock:
-                                                    if not link.rebalanced:
-                                                        RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link.destination.hash)} at link terminus ({link.expected_hops}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
-                                                        link.rebalanced = time.time()
-                                                        link.expected_hops = packet.hops
-                                                        if link.destination.hash in Transport.path_table:
-                                                            path_entry = Transport.path_table[link.destination.hash]
-                                                            path_entry[IDX_PT_HOPS] = packet.hops
-                                                            RNS.log(f"Path table re-balanced for {RNS.prettyhexrep(link.destination.hash)}", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                        if link.destination.identity.validate(signature, signed_data):
+                                            if not link.rebalanced:
+                                                RNS.log(f"Re-balancing path to {RNS.prettyhexrep(link.destination.hash)} at link terminus ({link.expected_hops}->{packet.hops})", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                                link.rebalanced = time.time()
+                                                link.expected_hops = packet.hops
+                                                path_entry = Transport.path_table.get(link.destination.hash)
+                                                if path_entry:
+                                                    path_entry[IDX_PT_HOPS] = packet.hops
+                                                    RNS.log(f"Path table re-balanced for {RNS.prettyhexrep(link.destination.hash)}", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
 
-                                            else: RNS.log(f"Aborting path re-balancing at link terminus for {RNS.prettyhexrep(link.destination.hash)} on link {link} due to invalid signature", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
-                                    except Exception as e: RNS.log("Error while validating link request proof for path re-balancing at link terminus. The contained exception was: "+str(e), REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                        else: RNS.log(f"Aborting path re-balancing at link terminus for {RNS.prettyhexrep(link.destination.hash)} on link {link} due to invalid signature", REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
+                                except Exception as e: RNS.log("Error while validating link request proof for path re-balancing at link terminus. The contained exception was: "+str(e), REBALANCE_LOGLEVEL) if RNS.sl(REBALANCE_LOGLEVEL) else None
 
-                                if packet.hops == link.expected_hops:
-                                    # Add this packet to the filter hashlist if we
-                                    # have determined that it's actually destined
-                                    # for this system, and then validate the proof
-                                    Transport.add_packet_hash(packet.packet_hash)
-                                    pending_link = link
-                                    break
+                            if packet.hops == link.expected_hops:
+                                # Add this packet to the filter hashlist if we
+                                # have determined that it's actually destined
+                                # for this system, and then validate the proof
+                                Transport.add_packet_hash(packet.packet_hash)
+                                pending_link = link
 
                     if pending_link: pending_link.validate_proof(packet)
 
             elif packet.context == RNS.Packet.RESOURCE_PRF:
-                with Transport.active_links_lock:
-                    for link in Transport.active_links:
-                        if link.link_id == packet.destination_hash:
-                            link.receive(packet)
-                            break
+                link = Transport.active_links_map.get(packet.destination_hash)
+                if link != None: link.receive(packet)
             else:
                 if packet.destination_type == RNS.Destination.LINK:
-                    with Transport.active_links_lock:
-                        for link in Transport.active_links:
-                            if link.link_id == packet.destination_hash:
-                                packet.link = link
-                                break
+                    link = Transport.active_links_map.get(packet.destination_hash)
+                    if link != None: packet.link = link
                             
                 if len(packet.data) == RNS.PacketReceipt.EXPL_LENGTH: proof_hash = packet.data[:RNS.Identity.HASHLENGTH//8]
                 else:                                                 proof_hash = None
@@ -2947,9 +2926,13 @@ class Transport:
     def register_link(link):
         RNS.log("Registering link "+str(link), RNS.LOG_EXTREME) if RNS.sl(RNS.LOG_EXTREME) else None
         if link.initiator:
-            with Transport.pending_links_lock: Transport.pending_links.append(link)
+            with Transport.pending_links_lock:
+                Transport.pending_links.append(link)
+                Transport.pending_links_map[link.link_id] = link
         else:
-            with Transport.active_links_lock: Transport.active_links.append(link)
+            with Transport.active_links_lock:
+                Transport.active_links.append(link)
+                Transport.active_links_map[link.link_id] = link
 
     @staticmethod
     def activate_link(link):
@@ -2958,10 +2941,14 @@ class Transport:
             if link in Transport.pending_links:
                 if link.status != RNS.Link.ACTIVE: raise IOError("Invalid link state for link activation: "+str(link.status))
                 Transport.pending_links.remove(link)
-                with Transport.active_links_lock: Transport.active_links.append(link)
+                Transport.pending_links_map.pop(link.link_id, None)
+                with Transport.active_links_lock:
+                    Transport.active_links.append(link)
+                    Transport.active_links_map[link.link_id] = link
+
                 link.status = RNS.Link.ACTIVE
-            else:
-                RNS.log("Attempted to activate a link that was not in the pending table", RNS.LOG_ERROR)
+
+            else: RNS.log("Attempted to activate a link that was not in the pending table", RNS.LOG_ERROR)
 
     @staticmethod
     def register_announce_handler(handler):

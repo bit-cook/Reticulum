@@ -556,7 +556,8 @@ class Identity:
                         if signal_blackholed: return "blackholed"
                         else:                 return False
 
-                if announced_identity.pub != None and announced_identity.validate(signature, signed_data):
+                if announced_identity.pub != None and (packet.announce_signature_validated or announced_identity.validate(signature, signed_data)):
+                    packet.announce_signature_validated = True
                     if only_validate_signature:
                         del announced_identity
                         return True
