@@ -158,6 +158,11 @@ class Interface:
         self.ifac_violations     = 0
         self.packet_filter_hits  = 0
 
+        self.reports_phy_stats = False
+        self.r_stat_rssi       = None
+        self.r_stat_snr        = None
+        self.r_stat_q          = None
+
     def get_hash(self):
         if not self.__hash: self.__hash = RNS.Identity.full_hash(str(self).encode("utf-8"))
         return self.__hash

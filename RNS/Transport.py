@@ -1909,21 +1909,19 @@ class Transport:
         if packet.receiving_interface != None:
             if not packet.receiving_interface.online: return
 
-            if hasattr(packet.receiving_interface, "r_stat_rssi"):
+            if packet.receiving_interface.reports_phy_stats:
                 if packet.receiving_interface.r_stat_rssi != None:
                     packet.rssi = packet.receiving_interface.r_stat_rssi
                     Transport.local_client_rssi_cache.append([packet.packet_hash, packet.rssi])
                     while len(Transport.local_client_rssi_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
                         Transport.local_client_rssi_cache.pop(0)
 
-            if hasattr(packet.receiving_interface, "r_stat_snr"):
                 if packet.receiving_interface.r_stat_snr != None:
                     packet.snr = packet.receiving_interface.r_stat_snr
                     Transport.local_client_snr_cache.append([packet.packet_hash, packet.snr])
                     while len(Transport.local_client_snr_cache) > Transport.LOCAL_CLIENT_CACHE_MAXSIZE:
                         Transport.local_client_snr_cache.pop(0)
 
-            if hasattr(packet.receiving_interface, "r_stat_q"):
                 if packet.receiving_interface.r_stat_q != None:
                     packet.q = packet.receiving_interface.r_stat_q
                     Transport.local_client_q_cache.append([packet.packet_hash, packet.q])
