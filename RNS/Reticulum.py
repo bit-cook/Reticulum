@@ -735,6 +735,11 @@ class Reticulum:
         if self.local_socket_path == None and self.use_af_unix:
             self.local_socket_path = "default"
 
+        dql = RNS.Reticulum.default_data_queue_length() or RNS.Transport.INBOUND_DA_QUEUE_LENGTH
+        BackboneInterface.BackboneInterface.DP_IC_HIGH_WM  = max(4, int((BackboneInterface.BackboneInterface.DP_IC_HIGH_WM_PCT/100.0) * dql))
+        BackboneInterface.BackboneInterface.DP_IC_MID_WM   = max(2, int((BackboneInterface.BackboneInterface.DP_IC_MID_WM_PCT/100.0)  * dql))
+        BackboneInterface.BackboneInterface.DP_IC_LOW_WM   = max(0, int((BackboneInterface.BackboneInterface.DP_IC_LOW_WM_PCT/100.0)  * dql))
+
         self.__start_local_interface()
 
         if self.is_shared_instance or self.is_standalone_instance:

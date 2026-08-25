@@ -413,10 +413,6 @@ class BackboneInterface(Interface):
         with BackboneInterface._ic_job_lock:
             if BackboneInterface._ic_job_active: return
             else:
-                dql = RNS.Reticulum.default_data_queue_length() or RNS.Transport.INBOUND_DA_QUEUE_LENGTH
-                BackboneInterface.DP_IC_HIGH_WM  = max(4, int((BackboneInterface.DP_IC_HIGH_WM_PCT/100.0) * dql))
-                BackboneInterface.DP_IC_MID_WM   = max(2, int((BackboneInterface.DP_IC_MID_WM_PCT/100.0)  * dql))
-                BackboneInterface.DP_IC_LOW_WM   = max(0, int((BackboneInterface.DP_IC_LOW_WM_PCT/100.0)  * dql))
                 BackboneInterface._ic_job_active = True
                 RNS.log(f"Started dataplane ingress control: High/mid/low water marks are {BackboneInterface.DP_IC_HIGH_WM}/{BackboneInterface.DP_IC_MID_WM}/{BackboneInterface.DP_IC_LOW_WM} packets", RNS.LOG_DEBUG)
                 try:
