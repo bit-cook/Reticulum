@@ -704,6 +704,12 @@ def _start_transport():
             "[interfaces]\n"
         )
 
+    # Raise queue lengths for to avoid drops
+    # at high feed rates
+    RNS.Transport.INBOUND_DA_QUEUE_LENGTH = 4096
+    RNS.Transport.INBOUND_AN_QUEUE_LENGTH = 1024
+    RNS.Transport.INBOUND_PR_QUEUE_LENGTH = 1024
+    RNS.Transport.INBOUND_IL_QUEUE_LENGTH = 1024
     _instance = RNS.Reticulum(configdir=config_dir,
                               loglevel=RNS.LOG_CRITICAL,
                               logdest=lambda *a, **k: None)
