@@ -73,7 +73,6 @@ class BackboneInterface(Interface):
     epoll = None
     listener_filenos = {}
     spawned_interface_filenos = {}
-    epoll = None
 
     _job_active     = False
     _ic_job_active  = False
@@ -883,6 +882,7 @@ class BackboneClientInterface(Interface):
             self.socket.settimeout(BackboneClientInterface.INITIAL_CONNECT_TIMEOUT)
             self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.socket.connect(target_address)
+            # TODO: Check missing setblocking(0)
             self.socket.settimeout(None)
 
             BackboneInterface.add_client_socket(self.socket, self)
