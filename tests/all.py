@@ -7,6 +7,7 @@ from .link import TestLink
 from .channel import TestChannel
 from .hkdf import TestHKDF
 from .ifac import TestIFAC
+from .coalesced_transmit import TestTransmitBuffer
+from .hdlc import TestReceiveBuffer
 
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
+if __name__ == '__main__': unittest.main(verbosity=2)
