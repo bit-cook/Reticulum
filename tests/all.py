@@ -9,5 +9,6 @@ from .hkdf import TestHKDF
 from .ifac import TestIFAC
 from .coalesced_transmit import TestTransmitBuffer
 from .hdlc import TestReceiveBuffer
+from .egress import TestHWMLimiter
 
 if __name__ == '__main__': unittest.main(verbosity=2)
