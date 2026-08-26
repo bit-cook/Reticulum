@@ -949,9 +949,8 @@ class BackboneClientInterface(Interface):
     def process_outgoing(self, data):
         if self.online and not self.detached:
             try:
-                buffer_was_empty = len(self.transmit_buffer) == 0
                 self.transmit_buffer += bytes([HDLC.FLAG])+HDLC.escape(data)+bytes([HDLC.FLAG])
-                if buffer_was_empty: BackboneInterface.tx_ready(self)
+                BackboneInterface.tx_ready(self)
 
             except Exception as e:
                 RNS.log("Exception occurred while transmitting via "+str(self)+", tearing down interface", RNS.LOG_ERROR)
