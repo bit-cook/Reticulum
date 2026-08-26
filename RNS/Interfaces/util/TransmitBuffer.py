@@ -63,8 +63,10 @@ class TransmitBuffer:
 
     # Queue a finalized and complete on-wire frame.
     # Executed by producer side only.
-    def append(self, frame):
+    def append(self, frame, limit=None):
         with self._tail_lock:
+            if limit is not None and (self._tx_total - self._tx_sent) + len(frame) > limit: return False
+
             # Allocate separate chunks to frames
             # larger than the coalescing target.
             if len(frame) >= self.COALESCE_TARGET:
@@ -90,6 +92,8 @@ class TransmitBuffer:
                     # Queue is idle. Make the frame visible immediately so
                     # sparse traffic does not incur coalescing latency.
                     self._flush()
+
+        return True
 
     def _flush(self):
         if self._cur is not None and len(self._cur) > 0:
