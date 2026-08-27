@@ -759,9 +759,7 @@ class Identity:
             return True
 
         except Exception as e:
-            raise e
-            RNS.log("Failed to load identity key", RNS.LOG_ERROR)
-            RNS.log("The contained exception was: "+str(e), RNS.LOG_ERROR)
+            RNS.log(f"Failed to load identity key, the contained exception was: {e}", RNS.LOG_ERROR)
             return False
 
     def load_public_key(self, pub_bytes):
@@ -779,8 +777,12 @@ class Identity:
             self.sig_pub       = Ed25519PublicKey.from_public_bytes(self.sig_pub_bytes)
 
             self.update_hashes()
+
+            return True
+
         except Exception as e:
-            RNS.log("Error while loading public key, the contained exception was: "+str(e), RNS.LOG_ERROR)
+            RNS.log(f"Error while loading public key, the contained exception was: {e}", RNS.LOG_ERROR)
+            return False
 
     def update_hashes(self):
         self.hash = Identity.truncated_hash(self.get_public_key())
