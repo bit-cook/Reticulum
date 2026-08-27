@@ -85,8 +85,7 @@ if native_build:
     from setuptools import Extension
     from Cython.Build import cythonize
 
-    # native_opt = os.environ.get("RNS_NATIVE_OPT", "-O3")
-    native_opt = os.environ.get("RNS_NATIVE_OPT", "-Os")
+    native_opt = os.environ.get("RNS_NATIVE_OPT", "-O3")
     if sys.platform == "win32": native_cargs = []
     else:                       native_cargs = [native_opt, "-g0", "-fno-lto"]
 
