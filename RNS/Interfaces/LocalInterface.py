@@ -195,7 +195,7 @@ class LocalClientInterface(Interface):
 
                 else:
                     self.writing = True
-                    data = bytes([HDLC.FLAG])+HDLC.escape(data)+bytes([HDLC.FLAG])
+                    data = bytes([HDLC.FLAG])+bytes([HDLC.FLAG])
                     self.socket.sendall(data)
                     self.writing = False
 
