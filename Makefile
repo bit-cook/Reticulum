@@ -50,6 +50,9 @@ build_wheel:
 build_pure_wheel:
 	python3 setup.py bdist_wheel --pure
 
+build_native:
+	python3 setup.py bdist_wheel --native
+
 documentation:
 	make -C docs html markdown
 
@@ -64,6 +67,8 @@ build_spkg: remove_symlinks build_sdist create_symlinks
 release: test remove_symlinks build_sdist build_wheel build_pure_wheel documentation manual distcollect create_symlinks
 
 debug: remove_symlinks build_wheel build_pure_wheel create_symlinks
+
+native: remove_symlinks build_native create_symlinks
 
 local: release sign
 
