@@ -201,7 +201,7 @@ class Identity:
             except Exception as e:
                 RNS.log(f"Error while serializing and writing known destinations: {e}", RNS.LOG_ERROR)
                 try: os.unlink(temp_file)
-                except Exception as e: RNS.log(f"Could not clean up temporary file {temp_file}: {e}", RNS.LOG_WARNING)
+                except Exception as exc: RNS.log(f"Could not clean up temporary file {temp_file}: {exc}", RNS.LOG_WARNING)
                 raise e
 
             RNS.log(f"Saved known destinations to storage in {RNS.prettyshorttime(time.time()-save_start)}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
