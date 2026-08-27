@@ -476,7 +476,7 @@ class BackboneInterface(Interface):
                         time.sleep(BackboneInterface.DP_EC_INTERVAL)
                         now = time.time()
                         try: interfaces = list(BackboneInterface.spawned_interface_filenos.values())
-                        except RuntimeError:
+                        except RuntimeError as e:
                             RNS.log(f"Deferring egress control evaluation due to error: {e}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
                             continue
 
