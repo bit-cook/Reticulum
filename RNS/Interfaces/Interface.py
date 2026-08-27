@@ -163,6 +163,14 @@ class Interface:
         self.dp_ingress_hold     = None
         self.dp_ingress_gated    = False
 
+        self.tx_hwm              = 4*1024*1024
+        self.tx_stalled          = False
+        self.tx_drops            = 0
+        self.tx_dropped_bytes    = 0
+        self._dp_ec_prev_sent    = 0
+        self._dp_ec_zero_ticks   = 0
+        self._dp_ec_last_drain   = time.time()
+
         self.reports_phy_stats = False
         self.r_stat_rssi       = None
         self.r_stat_snr        = None

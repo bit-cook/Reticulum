@@ -218,8 +218,12 @@ class LocalClientInterface(Interface):
         if self.online:
             try:
                 if self.epoll_backend:
-                    self.transmit_buffer.append(bytes([HDLC.FLAG])+HDLC.escape(data)+bytes([HDLC.FLAG]))
-                    BackboneInterface.tx_ready(self)
+                    frame = bytes([HDLC.FLAG])+HDLC.escape(data)+bytes([HDLC.FLAG])
+                    if self.tx_stalled or not self.transmit_buffer.append(frame, self.tx_hwm):
+                        self.tx_drops += 1
+                        self.tx_dropped_bytes += len(frame)
+                        RNS.log(f"Egress control dropping outbound frame of {RNS.prettysize(len(frame))} on {self}", RNS.LOG_DEBUG) if RNS.sl(RNS.LOG_DEBUG) else None
+                    else: BackboneInterface.tx_ready(self)
 
                 else:
                     self.writing = True
