@@ -1325,6 +1325,14 @@ class NomadNetworkNode():
             content = self.m_heading("Error", 2) + "\nThe requested repository was not found.\n"
             return self.render_template(content, st=st)
 
+        content_parts = []
+        nav_parts = []
+
+        # Breadcrumb navigation
+        breadcrumb = f">>\n{self.m_link('Node', self.PATH_INDEX)} / {self.m_link(group_name, self.PATH_GROUP, g=group_name)} / {self.m_link(repo_name, self.PATH_REPO, g=group_name, r=repo_name)} / {self.m_link('releases', self.PATH_RELEASES, g=group_name, r=repo_name)} / {tag}"
+        nav_parts.append(breadcrumb + "\n")
+        nav_content = "".join(nav_parts)
+
         releases_path = f"{repo['path']}.releases"
         if tag == "latest":
             releases, latest_release = self.owner.releases_list_data(releases_path)
@@ -1337,14 +1345,6 @@ class NomadNetworkNode():
                 tag = recent_releases[0]["tag"]
 
             else: tag = latest_release
-
-        content_parts = []
-        nav_parts = []
-
-        # Breadcrumb navigation
-        breadcrumb = f">>\n{self.m_link('Node', self.PATH_INDEX)} / {self.m_link(group_name, self.PATH_GROUP, g=group_name)} / {self.m_link(repo_name, self.PATH_REPO, g=group_name, r=repo_name)} / {self.m_link('releases', self.PATH_RELEASES, g=group_name, r=repo_name)} / {tag}"
-        nav_parts.append(breadcrumb + "\n")
-        nav_content = "".join(nav_parts)
 
         release_dir = os.path.join(releases_path, tag)
         
