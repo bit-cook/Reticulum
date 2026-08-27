@@ -50,8 +50,10 @@ modules     = py_modules+pyc_modules+so_modules+pyd_modules
 __all__ = list(set([os.path.basename(f).split(".")[0] for f in modules if not os.path.basename(f).split(".")[0] == "__init__"]))
 
 import importlib.util
-if importlib.util.find_spec("cython"): import cython; compiled = cython.compiled
-else: compiled = False
+try: from ._buildinfo import compiled
+except ImportError:
+    if importlib.util.find_spec("cython"): import cython; compiled = cython.compiled
+    else: compiled = False
 
 LOG_NONE     = -1
 LOG_CRITICAL = 0
