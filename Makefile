@@ -21,6 +21,19 @@ clean:
 	@-rm -rf ./tests/__pycache__
 	@-rm -rf ./tests/rnsconfig/storage
 	@-rm -rf ./*.egg-info
+	@-rm -rf ./RNS/*.c
+	@-rm -rf ./RNS/Cryptography/*.c
+	@-rm -rf ./RNS/Cryptography/aes/*.c
+	@-rm -rf ./RNS/Cryptography/pure25519/*.c
+	@-rm -rf ./RNS/Interfaces/*.c
+	@-rm -rf ./RNS/Interfaces/util/*.c
+	@-rm -rf ./RNS/Interfaces/Android/*.c
+	@-rm -rf ./RNS/Utilities/*.c
+	@-rm -rf ./RNS/Utilities/rngit/*.c
+	@-rm -rf ./RNS/Utilities/rnsh/*.c
+	@-rm -rf ./RNS/vendor/*.c
+	@-rm -rf ./RNS/vendor/i2plib/*.c
+	@-rm -rf 
 	@make -C docs clean
 	@echo Done
 
