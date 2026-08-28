@@ -137,6 +137,7 @@ class Transport:
     PATH_REQUEST_RG             = 1.5          # Extra grace time for roaming-mode interfaces to allow more suitable peers to respond first
     PATH_REQUEST_MI             = 20           # Minimum interval in seconds for automated path requests
 
+    TRANSPORT_WORKERS           = 1
     USE_INBOUND_QUEUE           = True
     USE_OUTBOUND_QUEUE          = False
     INBOUND_DA_QUEUE_LENGTH     = 1024
@@ -523,8 +524,10 @@ class Transport:
         Transport.prioritize_interfaces()
 
         # Spawn queue workers
-        if Transport.USE_INBOUND_QUEUE:  threading.Thread(target=Transport.inbound_job,  daemon=True).start()
-        if Transport.USE_OUTBOUND_QUEUE: threading.Thread(target=Transport.outbound_job, daemon=True).start()
+        for n in range(Transport.TRANSPORT_WORKERS):
+            if Transport.USE_INBOUND_QUEUE:  threading.Thread(target=Transport.inbound_job,  daemon=True).start()
+            if Transport.USE_OUTBOUND_QUEUE: threading.Thread(target=Transport.outbound_job, daemon=True).start()
+
         Transport.ready = True
 
         # Synthesize tunnels for any interfaces wanting it
