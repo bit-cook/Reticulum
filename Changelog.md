@@ -3,9 +3,10 @@
 This maintenance release fixes a regression in resource transfers that was introduced in 1.5.1, an `I2PInterface` bug, and sets dataplane control parameters to default values that are actually sensible. If you installed `1.5.1`, it's update time again, baby.
 
 **Changes**
+- Tuned dataplane control parameters
+- Added example for blocking unidentified page node peers to `rngit` default config
 - Fixed regression in resource transfers causing some `rngit` file downloads to fail
 - Fixed keepalive frames being passed to transport core on `I2PInterface`
-- Tuned dataplane control parameters
 
 **Verified Retrieval**
 You can retrieve and verify this release over Reticulum using the built-in `rngit release` utility. To retrieve only the installation `.whl` package, and the release manifest for future updates, you can use:
