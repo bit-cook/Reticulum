@@ -1,3 +1,40 @@
+### 2026-08-28: RNS 1.5.2
+
+This maintenance release fixes a regression in resource transfers that was introduced in 1.5.1, an `I2PInterface` bug, and sets dataplane control parameters to default values that are actually sensible. If you installed `1.5.1`, it's update time again, baby.
+
+**Changes**
+- Fixed regression in resource transfers causing some `rngit` file downloads to fail
+- Fixed keepalive frames being passed to transport core on `I2PInterface`
+- Tuned dataplane control parameters
+
+**Verified Retrieval**
+You can retrieve and verify this release over Reticulum using the built-in `rngit release` utility. To retrieve only the installation `.whl` package, and the release manifest for future updates, you can use:
+
+```sh
+rngit release rns://7649a50d84610232d1416b41d2896aff/reticulum/reticulum fetch "latest:rns-*.whl" --signer bc7291552be7a58f361522990465165c
+```
+
+To download all artifacts, including the documentation and source archive, you can use the following command:
+
+```sh
+rngit release rns://7649a50d84610232d1416b41d2896aff/reticulum/reticulum fetch latest:all --signer bc7291552be7a58f361522990465165c
+```
+
+**Release Signatures**
+Release artifacts include a signed `rsm` release manifest and `rsg` signature files that can be validated against the RNS release signing identity `<bc7291552be7a58f361522990465165c>` using `rngit` or `rnid`. To perform an offline verification of all release artifacts using a manifest:
+
+```sh
+rngit release rns_*.rsm verify --signer bc7291552be7a58f361522990465165c
+```
+
+To verify release artifacts using individual `rsg` files, while also verifying the manifest itself, download the `rsm` and `rsg` signatures, make sure they are in the same folder as the release artifact, and run `rnid` signature verification with the release identity as the required signer:
+
+```sh
+rnid -i bc7291552be7a58f361522990465165c -V rns_*.rsm *.rsg
+```
+
+The `rnid` utility will then verify the signatures, and display whether they are valid. If the signature cannot be verified, the release has been tampered with and should be discarded.
+
 ### 2026-08-28: RNS 1.5.1
 
 This release focuses on dataplane control, memory bounding and transport throughput, with adaptive ingress and egress control for interfaces, a new (and very efficient) zero-copy coalescing transmit buffer, an optimized HDLC deframer, and a range of other improvements to the inbound packet processing paths. It also introduces support for live profiling, and various new diagnostics output in `rnstatus`, along with a number of bug fixes and general improvements.
@@ -43,34 +80,6 @@ This release focuses on dataplane control, memory bounding and transport through
 - Fixed various minor bugs in `rnsh`, `rnir`, identity handling
 - Fixed a latent bug in the AES module, where an exception would not resolve it's exception description correctly, and instead raise another exception.
 - Removed dead Python 2 code from `umsgpack`
-
-**Verified Retrieval**
-You can retrieve and verify this release over Reticulum using the built-in `rngit release` utility. To retrieve only the installation `.whl` package, and the release manifest for future updates, you can use:
-
-```sh
-rngit release rns://7649a50d84610232d1416b41d2896aff/reticulum/reticulum fetch "latest:rns-*.whl" --signer bc7291552be7a58f361522990465165c
-```
-
-To download all artifacts, including the documentation and source archive, you can use the following command:
-
-```sh
-rngit release rns://7649a50d84610232d1416b41d2896aff/reticulum/reticulum fetch latest:all --signer bc7291552be7a58f361522990465165c
-```
-
-**Release Signatures**
-Release artifacts include a signed `rsm` release manifest and `rsg` signature files that can be validated against the RNS release signing identity `<bc7291552be7a58f361522990465165c>` using `rngit` or `rnid`. To perform an offline verification of all release artifacts using a manifest:
-
-```sh
-rngit release rns_*.rsm verify --signer bc7291552be7a58f361522990465165c
-```
-
-To verify release artifacts using individual `rsg` files, while also verifying the manifest itself, download the `rsm` and `rsg` signatures, make sure they are in the same folder as the release artifact, and run `rnid` signature verification with the release identity as the required signer:
-
-```sh
-rnid -i bc7291552be7a58f361522990465165c -V rns_*.rsm *.rsg
-```
-
-The `rnid` utility will then verify the signatures, and display whether they are valid. If the signature cannot be verified, the release has been tampered with and should be discarded.
 
 ### 2026-08-22: RNS 1.5.0
 
