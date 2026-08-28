@@ -52,9 +52,9 @@ class BackboneInterface(Interface):
     fast_flapping_lock  = threading.Lock()
     fast_flapping       = {}
 
-    DP_IC_HIGH_WM_PCT   = 85
-    DP_IC_MID_WM_PCT    = 10
-    DP_IC_LOW_WM_PCT    = 1
+    DP_IC_HIGH_WM_PCT   = 90
+    DP_IC_MID_WM_PCT    = 68
+    DP_IC_LOW_WM_PCT    = 10
     DP_IC_INTERVAL      = 0.250
     DP_IC_TRIGGER       = 1.5
     DP_IC_RCVBUF        = 32768
@@ -424,7 +424,7 @@ class BackboneInterface(Interface):
             return False
 
         if now - interface._dp_ec_last_drain >= BackboneInterface.DP_EC_DEAD_TIME:
-            RNS.log(f"No egress control drain progress for {RNS.prettyshorttime(BackboneInterface.DP_EC_DEAD_TIME, compact=True)} on {interface}, tearing down", RNS.LOG_WARNING)
+            RNS.log(f"No egress control drain progress for {RNS.prettyshorttime(BackboneInterface.DP_EC_DEAD_TIME, compact=True)} on {interface}, tearing down", RNS.LOG_NOTICE)
             try:
                 if hasattr(interface, "socket") and interface.socket:
                     fileno = interface.socket.fileno()
