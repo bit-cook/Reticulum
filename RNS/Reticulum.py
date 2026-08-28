@@ -1539,6 +1539,10 @@ class Reticulum:
                 ifstats["ptxb"]                        = interface.ptxb
                 ifstats["prxc"]                        = interface.prxc
                 ifstats["ptxc"]                        = interface.ptxc
+                ifstats["txdrp"]                       = interface.tx_drops
+                ifstats["txdrb"]                       = interface.tx_dropped_bytes
+                ifstats["txstalled"]                   = interface.tx_stalled
+                ifstats["txbuffered"]                  = len(interface.transmit_buffer) if interface.transmit_buffer else 0
                 ifstats["incoming_announce_frequency"] = interface.incoming_announce_frequency()
                 ifstats["outgoing_announce_frequency"] = interface.outgoing_announce_frequency()
                 ifstats["incoming_pr_frequency"]       = interface.incoming_pr_frequency()

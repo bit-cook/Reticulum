@@ -151,8 +151,7 @@ class TransmitBuffer:
         self._head_offset     = 0
 
     # Total number of bytes currently buffered, including the
-    # producer's in-progress coalescing chunk. This value can
-    # be used for high-water accounting.
+    # producer's in-progress coalescing chunk.
     def __len__(self): return self._tx_total-self._tx_sent
 
     # The number of bytes actually ready to send, and will be

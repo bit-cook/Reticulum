@@ -148,6 +148,7 @@ class Interface:
         self.ec_pr_freq               = RNS.Reticulum.get_instance()._default_ec_pr_freq()
         self.egress_control           = RNS.Reticulum.get_instance()._default_egress_control()
         self.held_announces           = {}
+        self.transmit_buffer          = None
 
         self.ia_freq_deque = deque(maxlen=Interface.IA_FREQ_SAMPLES)
         self.oa_freq_deque = deque(maxlen=Interface.OA_FREQ_SAMPLES)

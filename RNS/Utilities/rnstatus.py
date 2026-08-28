@@ -376,46 +376,29 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
         interfaces = stats["interfaces"]
         if sorting != None and isinstance(sorting, str):
             sorting = sorting.lower()
-            if sorting == "rate" or sorting == "bitrate":
-                interfaces.sort(key=lambda i: i["bitrate"], reverse=not sort_reverse)
-            if sorting == "rx":
-                interfaces.sort(key=lambda i: i["rxb"], reverse=not sort_reverse)
-            if sorting == "tx":
-                interfaces.sort(key=lambda i: i["txb"], reverse=not sort_reverse)
-            if sorting == "rxs":
-                interfaces.sort(key=lambda i: i["rxs"], reverse=not sort_reverse)
-            if sorting == "txs":
-                interfaces.sort(key=lambda i: i["txs"], reverse=not sort_reverse)
-            if sorting == "traffic":
-                interfaces.sort(key=lambda i: i["rxb"]+i["txb"], reverse=not sort_reverse)
-            if sorting == "announces" or sorting == "announce":
-                interfaces.sort(key=lambda i: i["incoming_announce_frequency"]+i["outgoing_announce_frequency"], reverse=not sort_reverse)
-            if sorting == "arx":
-                interfaces.sort(key=lambda i: i["incoming_announce_frequency"], reverse=not sort_reverse)
-            if sorting == "atx":
-                interfaces.sort(key=lambda i: i["outgoing_announce_frequency"], reverse=not sort_reverse)
-            if sorting == "arxc":
-                interfaces.sort(key=lambda i: i["arxc"], reverse=not sort_reverse)
-            if sorting == "atxc":
-                interfaces.sort(key=lambda i: i["atxc"], reverse=not sort_reverse)
-            if sorting == "prx":
-                interfaces.sort(key=lambda i: i["incoming_pr_frequency"], reverse=not sort_reverse)
-            if sorting == "ptx":
-                interfaces.sort(key=lambda i: i["outgoing_pr_frequency"], reverse=not sort_reverse)
-            if sorting == "prxc":
-                interfaces.sort(key=lambda i: i["prxc"], reverse=not sort_reverse)
-            if sorting == "ptxc":
-                interfaces.sort(key=lambda i: i["ptxc"], reverse=not sort_reverse)
-            if sorting == "held":
-                interfaces.sort(key=lambda i: i["held_announces"], reverse=not sort_reverse)
-            if sorting == "pvs":
-                interfaces.sort(key=lambda i: i["protocol_violations"], reverse=not sort_reverse)
-            if sorting == "ivs":
-                interfaces.sort(key=lambda i: i["ifac_violations"], reverse=not sort_reverse)
-            if sorting == "flt":
-                interfaces.sort(key=lambda i: i["packet_filter_hits"], reverse=not sort_reverse)
-            if sorting == "gravity" or sorting == "g":
-                interfaces.sort(key=lambda i: i["gravity"], reverse=not sort_reverse)
+            if sorting == "rate" or sorting == "bitrate":   interfaces.sort(key=lambda i: i["bitrate"], reverse=not sort_reverse)
+            if sorting == "rx":                             interfaces.sort(key=lambda i: i["rxb"], reverse=not sort_reverse)
+            if sorting == "tx":                             interfaces.sort(key=lambda i: i["txb"], reverse=not sort_reverse)
+            if sorting == "rxs":                            interfaces.sort(key=lambda i: i["rxs"], reverse=not sort_reverse)
+            if sorting == "txs":                            interfaces.sort(key=lambda i: i["txs"], reverse=not sort_reverse)
+            if sorting == "traffic":                        interfaces.sort(key=lambda i: i["rxb"]+i["txb"], reverse=not sort_reverse)
+            if sorting == "anns" or sorting == "announces": interfaces.sort(key=lambda i: i["incoming_announce_frequency"]+i["outgoing_announce_frequency"], reverse=not sort_reverse)
+            if sorting == "arx":                            interfaces.sort(key=lambda i: i["incoming_announce_frequency"], reverse=not sort_reverse)
+            if sorting == "atx":                            interfaces.sort(key=lambda i: i["outgoing_announce_frequency"], reverse=not sort_reverse)
+            if sorting == "arxc":                           interfaces.sort(key=lambda i: i["arxc"], reverse=not sort_reverse)
+            if sorting == "atxc":                           interfaces.sort(key=lambda i: i["atxc"], reverse=not sort_reverse)
+            if sorting == "prx":                            interfaces.sort(key=lambda i: i["incoming_pr_frequency"], reverse=not sort_reverse)
+            if sorting == "ptx":                            interfaces.sort(key=lambda i: i["outgoing_pr_frequency"], reverse=not sort_reverse)
+            if sorting == "prxc":                           interfaces.sort(key=lambda i: i["prxc"], reverse=not sort_reverse)
+            if sorting == "ptxc":                           interfaces.sort(key=lambda i: i["ptxc"], reverse=not sort_reverse)
+            if sorting == "held":                           interfaces.sort(key=lambda i: i["held_announces"], reverse=not sort_reverse)
+            if sorting == "pvs":                            interfaces.sort(key=lambda i: i["protocol_violations"], reverse=not sort_reverse)
+            if sorting == "ivs":                            interfaces.sort(key=lambda i: i["ifac_violations"], reverse=not sort_reverse)
+            if sorting == "flt":                            interfaces.sort(key=lambda i: i["packet_filter_hits"], reverse=not sort_reverse)
+            if sorting == "gravity" or sorting == "g":      interfaces.sort(key=lambda i: i["gravity"], reverse=not sort_reverse)
+            if sorting == "txdrp":                          interfaces.sort(key=lambda i: i["txdrp"], reverse=not sort_reverse)
+            if sorting == "txdrb":                          interfaces.sort(key=lambda i: i["txdrb"], reverse=not sort_reverse)
+            if sorting == "txbuf":                          interfaces.sort(key=lambda i: i["txbuffered"], reverse=not sort_reverse)
 
 
         for ifstat in interfaces:
@@ -508,6 +491,9 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
 
                         if not (name.startswith("Shared Instance[") or name.startswith("TCPInterface[Client") or name.startswith("LocalInterface[")):
                             print(f"    Mode      : {modestr}")
+
+                        if ifstat["txdrp"]:
+                            print(f"    TX Drops  : {ifstat['txdrp']} ({RNS.prettysize(ifstat['txdrb'])})")
 
                         if "bitrate" in ifstat and ifstat["bitrate"] != None:
                             print(f"    Rate      : {speed_str(ifstat['bitrate'])}, MTU {ifstat['mtu']}")
@@ -710,6 +696,11 @@ def program_setup(configdir, dispall=False, verbosity=0, name_filter=None, json=
                         if "rxs" in ifstat and "txs" in ifstat:
                             rxstat += "  "+RNS.prettyspeed(ifstat["rxs"])
                             txstat += "  "+RNS.prettyspeed(ifstat["txs"])
+
+                        if ifstat["txbuffered"]:
+                            if ifstat["txstalled"]: stlstr = ", stalled"
+                            else:                   stlstr = ""
+                            txstat += f" ({RNS.prettysize(ifstat['txbuffered'])} waiting{stlstr})"
                       
                         print(f"    Traffic   : {txstat}\n                {rxstat}")
 
@@ -851,7 +842,7 @@ def main(must_exit=True, rns_instance=None):
         parser.add_argument("-p", "--pps", action="store_true", help="display packets per second in totals", default=False)
         parser.add_argument("-q", "--queues", action="store_true", help="display queue stats", default=False)
         parser.add_argument("-z", "--profiling", action="store_true", help="display live profiling results", default=False)
-        parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, announces, arx, atx, arxc, atxc, held, prx, ptx, prxc, ptxc, pvs, ivs, flt]", default=None, type=str)
+        parser.add_argument("-s", "--sort", action="store", help="sort interfaces by [rate, traffic, rx, tx, rxs, txs, anns, arx, atx, arxc, atxc, held, prx, ptx, prxc, ptxc, pvs, ivs, flt, txdrp, txdrb, txbuf]", default=None, type=str)
         parser.add_argument("-r", "--reverse", action="store_true", help="reverse sorting", default=False)
         parser.add_argument("-j", "--json", action="store_true", help="output in JSON format", default=False)
         parser.add_argument("-R", action="store", metavar="hash", help="transport identity hash of remote instance to get status from", default=None, type=str)
