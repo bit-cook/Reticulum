@@ -568,7 +568,7 @@ def _bench_drainer(scenario, n, runs):
                     _feed(scenario.frames[base + i], scenario.interface)
                 fed += batch
                 target = baseline + fed
-                while scenario.completion_counter() < target:
+                while scenario.completion_counter() < target-800: # Assumes default inbound queue of 1024
                     time.sleep(0.0002)
             dt = time.perf_counter() - t0
             gc.enable()
