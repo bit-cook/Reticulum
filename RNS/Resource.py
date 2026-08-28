@@ -30,6 +30,7 @@
 
 import RNS
 import os
+import io
 import bz2
 import math
 import time
@@ -280,15 +281,18 @@ class Resource:
 
         if hasattr(data, "read"):
             if data_size == None: data_size = os.stat(data.name).st_size
-
             if data_size == 0:
-                RNS.log(f"Zero-sized stat at resource init, probably stream. Attempting to proxy stream data...", RNS.LOG_DEBUG)
-                stream_proxy = tempfile.TemporaryFile()
-                stream_proxy.write(data.read())
-                data_size = os.stat(stream_proxy.name).st_size
-                if data_size: RNS.log(f"Stream proxy succeeded, final data size is {RNS.prettysize(data_size)}", RNS.LOG_DEBUG)
-                else: RNS.log(f"Resource initialisation received an invalid readable input, or stream data that could not be proxied, the transfer will likely fail.", RNS.LOG_WARNING)
-                data = stream_proxy
+                if isinstance(data, io.BufferedReader):
+                    RNS.log(f"Attempting to proxy stream data...", RNS.LOG_DEBUG)
+                    stream_proxy = tempfile.TemporaryFile()
+                    stream_proxy.write(data.read())
+                    stream_proxy.flush(); stream_proxy.seek(0)
+                    data_size = os.stat(stream_proxy.name).st_size
+                    if data_size: RNS.log(f"Stream proxy succeeded, final data size is {RNS.prettysize(data_size)}", RNS.LOG_DEBUG)
+                    else: RNS.log(f"Resource initialisation received an invalid readable input, or stream data that could not be proxied, the transfer will likely fail.", RNS.LOG_WARNING)
+                    data = stream_proxy
+
+                else: RNS.log(f"Got zero-sized readable at resource initialisation, the transfer will likely.", RNS.LOG_WARNING)
 
             self.total_size = data_size + self.metadata_size
 
