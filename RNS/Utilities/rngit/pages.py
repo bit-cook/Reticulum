@@ -1671,7 +1671,7 @@ class NomadNetworkNode():
 
         repo = self.get_accessible_repository(remote_identity, group_name, repo_name)
         if not repo:
-            RNS.log(f"Repository not found or no access for artifact request {group_name}/{repo_name}/{tag}/{artifact}", RNS.LOG_WARNING)
+            RNS.log(f"Repository not found or no access for artifact request {group_name}/{repo_name}/{tag}/{artifact}", RNS.LOG_DEBUG)
             return None
 
         releases_path = f"{repo['path']}.releases"
@@ -1729,7 +1729,7 @@ class NomadNetworkNode():
 
         repo = self.get_accessible_repository(remote_identity, group_name, repo_name)
         if not repo:
-            RNS.log(f"Repository not found or no access for download request {group_name}/{repo_name}/{ref}/{file_path}", RNS.LOG_WARNING)
+            RNS.log(f"Repository not found or no access for download request {group_name}/{repo_name}/{ref}/{file_path}", RNS.LOG_DEBUG)
             return None
 
         repo_path = repo["path"]
@@ -1783,7 +1783,7 @@ class NomadNetworkNode():
 
         repo = self.get_accessible_repository(remote_identity, group_name, repo_name)
         if not repo:
-            RNS.log(f"Repository not found or no access for workdoc download request {group_name[:128]}/{repo_name[:128]}/{doc_id}", RNS.LOG_WARNING)
+            RNS.log(f"Repository not found or no access for workdoc download request {group_name[:128]}/{repo_name[:128]}/{doc_id}", RNS.LOG_DEBUG)
             return None
 
         doc_access = self.resolve_doc_permission(remote_identity, group_name, repo_name, doc_id, self.owner.PERM_READ)
